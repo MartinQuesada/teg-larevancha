@@ -1,0 +1,4 @@
+?package(teg): needs=X11 section="Games/Strategy" title="Tegserver" \
+  longtitle="Tenes Empanadas Graciela Server" command="/usr/games/tegserver"
+?package(teg): needs=X11 section="Games/Strategy" title="Tegclient" \
+  longtitle="Tenes Empanadas Graciela Client" command="/usr/games/tegclient"

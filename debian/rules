@@ -1,0 +1,48 @@
+#!/usr/bin/make -f
+
+tmp:=$(shell pwd)/debian/tmp
+
+CFLAGS := -O2
+ifneq "$(findstring debug,$(DEB_BUILD_OPTIONS))" ""
+CFLAGS += -g
+endif
+
+build: build-stamp
+build-stamp:
+	dh_testdir
+	CFLAGS="$(CFLAGS)" ./configure --enable-ggz=no --prefix=/usr --with-gtk-prefix=/usr \
+	--bindir=\$${prefix}/games
+	$(MAKE)
+	touch build-stamp
+
+clean:
+	dh_testdir
+	dh_testroot
+	[ ! -f Makefile ] || $(MAKE) distclean
+	rm -f ggz/*.dsc ggz/Makefile config.log build-stamp client/gui-null/Makefile
+	dh_clean
+
+binary-indep:
+
+binary-arch: build
+	dh_testdir
+	dh_testroot
+	$(MAKE) install prefix=$(tmp)/usr sysconfdir=$(tmp)/etc
+	dh_installdocs README AUTHORS HACKING PEOPLE README.GGZ TODO
+	dh_installmenu
+	dh_installman debian/tegserver.6 debian/tegclient.6 debian/tegrobot.6
+	dh_installchangelogs ChangeLog
+ifeq "$(findstring nostrip,$(DEB_BUILD_OPTIONS))" ""	
+	dh_strip
+endif	
+	dh_compress
+	dh_fixperms
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary: binary-indep binary-arch
+
+.PHONY: build clean binary-indep binary-arch binary

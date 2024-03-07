@@ -1,0 +1,17 @@
+Source: teg
+Section: games
+Priority: optional
+Maintainer: Davide Puricelli (evo) <evo@debian.org>
+Standards-Version: 3.2.1
+Build-Depends: debhelper, autoconf, automake, libtool, gettext, bison, xlibs-dev, zlib1g-dev, libgnome-dev, libdb3-dev, gdk-imlib-dev, libxml-dev, libgtk1.2-dev, libglib1.2-dev, libaudiofile-dev, libesd0-dev
+
+Package: teg
+Architecture: any
+Depends: ${shlibs:Depends}
+Description: Turn based strategy game.
+ Tenes Empanadas Graciela is a clone of Plan Tactico y Estrategico
+ de la Guerra, based on Risk.
+ .
+ Teg is a multiplayer game (it can be played across the internet)
+ and it comes with a server, a GNOME client and a robot.
+ It has support for IPv6, too.
