@@ -20434,54 +20434,55 @@ echo "$as_me:$LINENO: checking for TEG_LIBGNOME" >&5
 echo $ECHO_N "checking for TEG_LIBGNOME... $ECHO_C" >&6
 
 if test -n "$PKG_CONFIG"; then
-        if test -n "$PKG_CONFIG" && \
-    { (echo "$as_me:$LINENO: \$PKG_CONFIG --exists --print-errors \"libgnomeui-2.0\"") >&5
-  ($PKG_CONFIG --exists --print-errors "libgnomeui-2.0") 2>&5
-  ac_status=$?
-  echo "$as_me:$LINENO: \$? = $ac_status" >&5
-  (exit $ac_status); }; then
-  pkg_cv_TEG_LIBGNOME_CFLAGS=`$PKG_CONFIG --cflags "libgnomeui-2.0" 2>/dev/null`
+    if test -n "$PKG_CONFIG" && \
+    { (echo "$as_me:$LINENO: \$PKG_CONFIG --exists --print-errors \"Qt5Core\"") >&5
+      ($PKG_CONFIG --exists --print-errors "Qt5Core") 2>&5
+      ac_status=$?
+      echo "$as_me:$LINENO: \$? = $ac_status" >&5
+      (exit $ac_status); }; then
+        pkg_cv_TEG_QT_CFLAGS=`$PKG_CONFIG --cflags "Qt5Core" 2>/dev/null`
+    else
+        pkg_failed=yes
+    fi
 else
-  pkg_failed=yes
+    pkg_failed=untried
 fi
-else
-	pkg_failed=untried
-fi
+
 if test -n "$PKG_CONFIG"; then
-        if test -n "$PKG_CONFIG" && \
-    { (echo "$as_me:$LINENO: \$PKG_CONFIG --exists --print-errors \"libgnomeui-2.0\"") >&5
-  ($PKG_CONFIG --exists --print-errors "libgnomeui-2.0") 2>&5
-  ac_status=$?
-  echo "$as_me:$LINENO: \$? = $ac_status" >&5
-  (exit $ac_status); }; then
-  pkg_cv_TEG_LIBGNOME_LIBS=`$PKG_CONFIG --libs "libgnomeui-2.0" 2>/dev/null`
+    if test -n "$PKG_CONFIG" && \
+    { (echo "$as_me:$LINENO: \$PKG_CONFIG --exists --print-errors \"Qt5Widgets\"") >&5
+      ($PKG_CONFIG --exists --print-errors "Qt5Widgets") 2>&5
+      ac_status=$?
+      echo "$as_me:$LINENO: \$? = $ac_status" >&5
+      (exit $ac_status); }; then
+        pkg_cv_TEG_QT_LIBS=`$PKG_CONFIG --libs "Qt5Widgets" 2>/dev/null`
+    else
+        pkg_failed=yes
+    fi
 else
-  pkg_failed=yes
-fi
-else
-	pkg_failed=untried
+    pkg_failed=untried
 fi
 
 if test $pkg_failed = yes; then
-	TEG_LIBGNOME_PKG_ERRORS=`$PKG_CONFIG --errors-to-stdout --print-errors "libgnomeui-2.0"`
-	# Put the nasty error message in config.log where it belongs
-	echo "$TEG_LIBGNOME_PKG_ERRORS" 1>&5
+    TEG_QT_PKG_ERRORS=`$PKG_CONFIG --errors-to-stdout --print-errors "Qt5Core Qt5Widgets"`
+    # Put the nasty error message in config.log where it belongs
+    echo "$TEG_QT_PKG_ERRORS" 1>&5
 
-	{ { echo "$as_me:$LINENO: error: Package requirements (libgnomeui-2.0) were not met.
+    { { echo "$as_me:$LINENO: error: Package requirements (Qt5Core Qt5Widgets) were not met.
 Consider adjusting the PKG_CONFIG_PATH environment variable if you
 installed software in a non-standard prefix.
 
-Alternatively you may set the TEG_LIBGNOME_CFLAGS and TEG_LIBGNOME_LIBS environment variables
+Alternatively you may set the TEG_QT_CFLAGS and TEG_QT_LIBS environment variables
 to avoid the need to call pkg-config.  See the pkg-config man page for
 more details." >&5
-echo "$as_me: error: Package requirements (libgnomeui-2.0) were not met.
+    echo "$as_me: error: Package requirements (Qt5Core Qt5Widgets) were not met.
 Consider adjusting the PKG_CONFIG_PATH environment variable if you
 installed software in a non-standard prefix.
 
-Alternatively you may set the TEG_LIBGNOME_CFLAGS and TEG_LIBGNOME_LIBS environment variables
+Alternatively you may set the TEG_QT_CFLAGS and TEG_QT_LIBS environment variables
 to avoid the need to call pkg-config.  See the pkg-config man page for
 more details." >&2;}
-   { (exit 1); exit 1; }; }
+    { (exit 1); exit 1; }; }
 elif test $pkg_failed = untried; then
 	{ { echo "$as_me:$LINENO: error: The pkg-config script could not be found or is too old.  Make sure it
 is in your PATH or set the PKG_CONFIG environment variable to the full
