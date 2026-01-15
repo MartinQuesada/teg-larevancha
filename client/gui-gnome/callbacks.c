@@ -278,26 +278,22 @@ void on_about_activate(GtkMenuItem *menuitem, gpointer user_data)
 
 	if (!about) {
 		about = gnome_about_new (
-			_("Tenes Empanadas Graciela"), VERSION,
-			_("Copyright (C) 2000, 2002 Ricardo Quesada"),
+			_("Tenes Empanadas Graciela"), "0.2",
+			_("Copyright (C) 2000, 2002 Ricardo Quesada\nCopyright (C) 2026 Martin Quesada, martin@quesada.ar"),
 			_("A clone of T.E.G. (a Risk clone)."),
 			(const char**) authors,
 			(const char**) documenters,
 			 strcmp (translator_credits, "translator_credits") != 0 ? translator_credits : NULL,
 			pixbuf);
 
-		// Temporarily commented out due to GTK4 compatibility issues
-		// gtk_signal_connect (GTK_OBJECT (about), "destroy",
-		// 		    GTK_SIGNAL_FUNC (gtk_widget_destroyed),
-		// 		    &about);
+		/* Connect response signal to close the dialog */
+		g_signal_connect(about, "response", G_CALLBACK(gtk_widget_destroy), NULL);
+		g_signal_connect(about, "destroy", G_CALLBACK(gtk_widget_destroyed), &about);
 
-
-		// hbox = gtk_hbox_new (TRUE, 0);
-		// href = gnome_href_new ("http://teg.sourceforge.net", _("TEG Home Page"));
-		// gtk_box_pack_start (GTK_BOX (hbox), href, FALSE, FALSE, 0);
-		// gtk_box_pack_start (GTK_BOX (GTK_DIALOG (about)->vbox),
-		// 	    hbox, TRUE, FALSE, 0);
-		// gtk_widget_show_all (hbox);
+		/* Set parent window */
+		if (main_window) {
+			gtk_window_set_transient_for(GTK_WINDOW(about), GTK_WINDOW(main_window));
+		}
 	}
 
 	gtk_widget_show_now (about);
