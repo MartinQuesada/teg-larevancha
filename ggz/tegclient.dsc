@@ -2,7 +2,7 @@
 [ModuleInfo]
 Game = TEG
 Author = Ricardo Quesada
-CommandLine = /home/mquesada/teg3/bin/tegclient --ggz
+CommandLine = /usr/local/bin/tegclient --ggz
 Frontend = gtk
 Homepage = http://teg.sourceforge.net
 Name = teg

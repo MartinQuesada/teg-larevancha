@@ -16,8 +16,8 @@ from gui import twidget_manager
 from gui import ttest
 import theme
 
-class TegClient( object ):
-    def __init__( self ):
+class TegClient(object):
+    def __init__(self):
 
         pygame.init()
 
@@ -27,7 +27,7 @@ class TegClient( object ):
         gui.twidget_manager.TWidgetManager.sdl_surface = surface
 
 
-    def run( self ):
+    def run(self):
         gui.ttest.TTest().run()
 
 

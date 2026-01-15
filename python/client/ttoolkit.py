@@ -27,11 +27,11 @@ import pygame
 import font
 from events import *
 
-class TToolkitException( Exception ):
+class TToolkitException(Exception):
     pass
 
 
-class TDisplay( object ):
+class TDisplay(object):
     def __init__( self, surface = None ):
         TToolkit.surface = surface 
         self._listTk = []
@@ -60,7 +60,7 @@ class TDisplay( object ):
     def setEventMgr( self, mgr ):
         pass
 
-class TToolkit( object ):
+class TToolkit(object):
 
     surface = None
 

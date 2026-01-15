@@ -18,10 +18,19 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.
  */
+/**
+ * @file g_cont.c
+ * Manejo de continentes - Migrado a GTK3/Cairo
+ * 
+ * En la versión original, cada continente era un GnomeCanvasGroup.
+ * En la versión migrada, los continentes son solo datos de posición
+ * que se usan al dibujar el mapa con Cairo.
+ */
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
-#include <gnome.h>
+
+#include <gtk/gtk.h>
 
 #include "gui.h"
 #include "client.h"
@@ -30,39 +39,72 @@
 #include "g_cont.h"
 #include "themes.h"
 
-
 static int initialized = 0;
 
+/* Datos de los continentes */
 struct _G_conts G_conts[CONT_CANT];
 
-void G_cont_init()
+/**
+ * Inicializa los datos de continentes desde el tema
+ */
+void G_cont_init(void)
 {
 	int i;
 	TContinent cont;
 
-	if( initialized )
+	if (initialized)
 		return;
 
-	for( i=0; i < CONT_CANT ; i++ ) {
-		if( theme_giveme_continent(&cont,i) == TEG_STATUS_SUCCESS ) {
+	for (i = 0; i < CONT_CANT; i++) {
+		if (theme_giveme_continent(&cont, i) == TEG_STATUS_SUCCESS) {
 			G_conts[i].x = cont.pos_x;
 			G_conts[i].y = cont.pos_y;
+		} else {
+			G_conts[i].x = 0;
+			G_conts[i].y = 0;
 		}
 	}
 
 	initialized = 1;
 }
 
-void G_cont_create( int cont, GnomeCanvasGroup *root )
+/**
+ * En GTK3/Cairo ya no creamos grupos de canvas.
+ * Esta función existe para compatibilidad pero solo inicializa los datos.
+ */
+void G_cont_create(int cont)
 {
-	if(!initialized)
+	if (!initialized)
 		G_cont_init();
+	
+	/* En GTK3/Cairo no hay grupos de canvas,
+	 * los continentes son solo offsets de posición */
+}
 
-	G_conts[cont].cont_group = GNOME_CANVAS_GROUP(
-			gnome_canvas_item_new (
-				root,
-				gnome_canvas_group_get_type (),
-				"x", (double) G_conts[cont].x,
-				"y", (double) G_conts[cont].y,
-				NULL));
+/**
+ * Obtiene la posición X de un continente
+ */
+int G_cont_get_x(int cont)
+{
+	if (cont < 0 || cont >= CONT_CANT)
+		return 0;
+	return G_conts[cont].x;
+}
+
+/**
+ * Obtiene la posición Y de un continente
+ */
+int G_cont_get_y(int cont)
+{
+	if (cont < 0 || cont >= CONT_CANT)
+		return 0;
+	return G_conts[cont].y;
+}
+
+/**
+ * Retorna el número total de continentes
+ */
+int G_cont_tot(void)
+{
+	return CONT_CANT;
 }

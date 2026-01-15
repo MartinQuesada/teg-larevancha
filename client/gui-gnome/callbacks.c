@@ -25,7 +25,7 @@
 #  include <config.h>
 #endif
 
-#include <gnome.h>
+#include "gnome-compat.h"
 
 #include "gui.h"
 #include "client.h"
@@ -67,17 +67,36 @@ void destroy_window( GtkWidget * widget, GtkWidget **window )
 void raise_and_focus (GtkWidget *widget)
 {
 	g_assert (GTK_WIDGET_REALIZED (widget));
-	gdk_window_show (widget->window);
+	{ GdkWindow *win = gtk_widget_get_window(widget); if (win) gdk_window_show(win); }
 	gtk_widget_grab_focus (widget);
 }
 
 /*
  * otras funciones
  */
-TEG_STATUS pre_client_recv( gpointer data, int sock, GdkInputCondition GDK_INPUT_READ )
+
+/* Versión GTK2 (deprecated) */
+TEG_STATUS pre_client_recv( gpointer data, int sock, GdkInputCondition condition )
 {
 	client_recv( sock );
 	return TEG_STATUS_SUCCESS;
+}
+
+/* Versión GTK3 usando GIOChannel */
+gboolean pre_client_recv_gio(GIOChannel *source, GIOCondition condition, gpointer data)
+{
+	int fd = g_io_channel_unix_get_fd(source);
+	
+	if (condition & G_IO_IN) {
+		client_recv(fd);
+	}
+	
+	if (condition & (G_IO_ERR | G_IO_HUP | G_IO_NVAL)) {
+		/* Error o conexión cerrada */
+		return FALSE;  /* Remover el watch */
+	}
+	
+	return TRUE;  /* Mantener el watch activo */
 }
 
 /*
@@ -267,17 +286,18 @@ void on_about_activate(GtkMenuItem *menuitem, gpointer user_data)
 			 strcmp (translator_credits, "translator_credits") != 0 ? translator_credits : NULL,
 			pixbuf);
 
-		gtk_signal_connect (GTK_OBJECT (about), "destroy",
-				    GTK_SIGNAL_FUNC (gtk_widget_destroyed),
-				    &about);
+		// Temporarily commented out due to GTK4 compatibility issues
+		// gtk_signal_connect (GTK_OBJECT (about), "destroy",
+		// 		    GTK_SIGNAL_FUNC (gtk_widget_destroyed),
+		// 		    &about);
 
 
-		hbox = gtk_hbox_new (TRUE, 0);
-		href = gnome_href_new ("http://teg.sourceforge.net", _("TEG Home Page"));
-		gtk_box_pack_start (GTK_BOX (hbox), href, FALSE, FALSE, 0);
-		gtk_box_pack_start (GTK_BOX (GTK_DIALOG (about)->vbox),
-			    hbox, TRUE, FALSE, 0);
-		gtk_widget_show_all (hbox);
+		// hbox = gtk_hbox_new (TRUE, 0);
+		// href = gnome_href_new ("http://teg.sourceforge.net", _("TEG Home Page"));
+		// gtk_box_pack_start (GTK_BOX (hbox), href, FALSE, FALSE, 0);
+		// gtk_box_pack_start (GTK_BOX (GTK_DIALOG (about)->vbox),
+		// 	    hbox, TRUE, FALSE, 0);
+		// gtk_widget_show_all (hbox);
 	}
 
 	gtk_widget_show_now (about);

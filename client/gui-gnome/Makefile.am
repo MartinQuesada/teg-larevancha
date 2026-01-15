@@ -26,16 +26,16 @@ libguiclient_a_SOURCES = \
 	g_cont.c g_cont.h	\
 	g_country.c g_country.h	\
 	stock.c stock.h		\
-	cards.c cards.h		\
 	dices.c dices.h		\
-	mission.c mission.h	\
-	status.c status.h	\
-	connect.c connect.h	\
-	armies.c armies.h	\
 	colors.c colors.h	\
-	preferences.c preferences.h \
-	g_scores.c g_scores.h \
-	locate_country.c locate_country.h \
+	connect.c connect.h	\
+	cards.c cards.h		\
+	armies.c armies.h	\
+	status.c status.h	\
+	mission.c mission.h	\
+	preferences.c preferences.h	\
+	locate_country.c locate_country.h	\
+	stubs.c			\
 	fonts.h			\
 	robot.xpm
 
@@ -43,12 +43,12 @@ libguiclient_a_SOURCES = \
 
 @INTLTOOL_DESKTOP_RULE@
 
-schemadir   = $(sysconfdir)/gconf/schemas
-schema_DATA = teg.schemas
+schemadir   = $(datadir)/glib-2.0/schemas
+schema_DATA = org.gnome.teg.gschema.xml
 
 EXTRA_DIST = teg.desktop $(schema_DATA)
 
 Games_DATA = teg.desktop
 
 install-data-local:
-	GCONF_CONFIG_SOURCE=$(GCONF_CONFIG_SOURCE) $(GCONFTOOL) --makefile-install-rule $(srcdir)/$(schema_DATA)
+	$(GLIB_COMPILE_SCHEMAS) $(DESTDIR)$(schemadir)

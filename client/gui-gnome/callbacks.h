@@ -21,7 +21,7 @@
 #ifndef __GUI_GNOME_CALLBACKS_H
 #define __GUI_GNOME_CALLBACKS_H
 
-#include <gnome.h>
+#include "gnome-compat.h"
 #include "gui.h"
 #include "client.h"
 
@@ -73,6 +73,9 @@ void destroy_window( GtkWidget * widget, GtkWidget **window );
 
 void raise_and_focus (GtkWidget *widget);
 
-TEG_STATUS pre_client_recv( gpointer data, int sock, GdkInputCondition GDK_INPUT_READ );
+TEG_STATUS pre_client_recv( gpointer data, int sock, GdkInputCondition condition );
+
+/* Versión GTK3 con GIOChannel */
+gboolean pre_client_recv_gio(GIOChannel *source, GIOCondition condition, gpointer data);
 
 #endif /* __GUI_GNOME_CALLBACKS_H */

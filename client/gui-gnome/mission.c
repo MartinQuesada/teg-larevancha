@@ -26,7 +26,7 @@
 #  include <config.h>
 #endif
 
-#include <gnome.h>
+#include "gnome-compat.h"
 
 #include "gui.h"
 #include "client.h"
@@ -58,145 +58,74 @@ static TEG_STATUS mission_load()
 	return TEG_STATUS_SUCCESS;
 }
 
+/* Widgets estáticos para el diálogo de misión */
+static GtkWidget *mission_image = NULL;
+static GtkWidget *mission_label1 = NULL;
+static GtkWidget *mission_label2 = NULL;
+
+static void mission_update_content(void)
+{
+	if (mission_number == -1)
+		return;
+
+	/* Actualizar imagen */
+	if (mission_image && tar_mission) {
+		gtk_image_set_from_pixbuf(GTK_IMAGE(mission_image), tar_mission);
+	}
+
+	/* Actualizar texto de la misión */
+	if (mission_label1) {
+		gtk_label_set_text(GTK_LABEL(mission_label1), missions_get_name(mission_number));
+	}
+
+	/* Actualizar texto secundario */
+	if (mission_label2) {
+		if (mission_number == g_game.secret_mission || mission_number == MISSION_COMMON) {
+			char *text;
+			if (mission_number == g_game.secret_mission)
+				text = _("[This is your secret mission.]");
+			else
+				text = _("[This is the common mission.]");
+			gtk_label_set_text(GTK_LABEL(mission_label2), text);
+			gtk_widget_show(mission_label2);
+		} else {
+			gtk_widget_hide(mission_label2);
+		}
+	}
+}
+
 static TEG_STATUS mission_view_number( GtkWidget *dialog )
 {
-	static GtkWidget	*canvas=NULL;
-	static GnomeCanvasItem *imagebg=NULL;
-	static GnomeCanvasItem *imagetxt=NULL;
-	static GnomeCanvasItem *imagetxt2=NULL;
-
-	if( mission_number == -1 )
-		return TEG_STATUS_ERROR;
-
-	if( canvas == NULL ) {
-		canvas = gnome_canvas_new();
-		gtk_widget_set_usize (canvas, gdk_pixbuf_get_width(tar_mission), gdk_pixbuf_get_height(tar_mission) );
-		gnome_canvas_set_scroll_region (GNOME_CANVAS (canvas), 0, 0, gdk_pixbuf_get_width(tar_mission), gdk_pixbuf_get_height(tar_mission) );
-		imagebg = gnome_canvas_item_new(
-			gnome_canvas_root(GNOME_CANVAS(canvas)),
-			gnome_canvas_pixbuf_get_type (),
-			"pixbuf", tar_mission,
-			"x", 0.0,
-			"y", 0.0,
-			"width", (double) gdk_pixbuf_get_width(tar_mission),
-			"height", (double) gdk_pixbuf_get_height(tar_mission),
-			"anchor", GTK_ANCHOR_NW,
-			NULL);
-
-
-		gdk_pixbuf_unref(tar_mission);
-
-		gtk_box_pack_start_defaults( GTK_BOX(GNOME_DIALOG(dialog)->vbox), GTK_WIDGET(canvas));
-	}
-
-	if( imagetxt )
-		gtk_object_destroy( GTK_OBJECT(imagetxt) );
-
-	imagetxt = gnome_canvas_item_new(
-		gnome_canvas_root(GNOME_CANVAS(canvas)),
-		gnome_canvas_text_get_type(),
-		"text", missions_get_name( mission_number ),
-		"x", (double) 4,
-		"y", (double) 10,
-		"x_offset", (double) -1,
-		"y_offset", (double) -1,
-		"font", HELVETICA_12_FONT,
-		"fill_color", "brown",
-		"anchor",GTK_ANCHOR_NW,
-		NULL);
-
-	if( imagetxt2 ) {
-		gtk_object_destroy( GTK_OBJECT(imagetxt2) );
-		imagetxt2 = NULL;
-	}
-
-	if( mission_number == g_game.secret_mission || mission_number == MISSION_COMMON) {
-		char *text;
-
-		if( mission_number == g_game.secret_mission )
-			text = _("[This is your secret mission.]");
-		else 
-			text = _("[This is the common mission.]");
-
-		imagetxt2 = gnome_canvas_item_new(
-			gnome_canvas_root(GNOME_CANVAS(canvas)),
-			gnome_canvas_text_get_type(),
-			"text",text,
-			"x", (double) 4,
-			"y", (double) 124,
-			"x_offset", (double) -1,
-			"y_offset", (double) -1,
-			"font", HELVETICA_10_FONT,
-			"fill_color", "brown",
-			"anchor",GTK_ANCHOR_NW,
-			NULL);
-	}
-
-	gtk_widget_show (canvas);
-
+	mission_update_content();
 	return TEG_STATUS_SUCCESS;
 }
 
 TEG_STATUS mission_view_fake_number( GtkWidget *frame, int mission )
 {
-	GtkWidget	*canvas;
-	GnomeCanvasItem	*imagebg;
-	GnomeCanvasItem	*imagetxt;
-	GnomeCanvasItem	*imagetxt2;
+	GtkWidget	*image_widget;
+	GtkWidget	*label1;
+	GtkWidget	*label2;
 	char *text;
 
 	if( mission_load() != TEG_STATUS_SUCCESS )
 		return TEG_STATUS_ERROR;
 
-	canvas = gnome_canvas_new();
-	gtk_widget_set_usize (canvas, gdk_pixbuf_get_width(tar_mission), gdk_pixbuf_get_height(tar_mission) );
-	gnome_canvas_set_scroll_region (GNOME_CANVAS (canvas), 0, 0, gdk_pixbuf_get_width(tar_mission), gdk_pixbuf_get_height(tar_mission) );
-	imagebg = gnome_canvas_item_new(
-		gnome_canvas_root(GNOME_CANVAS(canvas)),
-		gnome_canvas_pixbuf_get_type (),
-		"pixbuf", tar_mission,
-		"x", 0.0,
-		"y", 0.0,
-		"width", (double) gdk_pixbuf_get_width(tar_mission),
-		"height", (double) gdk_pixbuf_get_height(tar_mission),
-		"anchor", GTK_ANCHOR_NW,
-		NULL);
+	/* GTK3: Usamos GtkImage con GdkPixbuf */
+	image_widget = gtk_image_new_from_pixbuf(tar_mission);
 
-#if 0
-	gtk_signal_connect (GTK_OBJECT (imagebg), "destroy",
-		(GtkSignalFunc) free_imlib_image,
-		tar_mission);
-#endif
-
-	imagetxt = gnome_canvas_item_new(
-		gnome_canvas_root(GNOME_CANVAS(canvas)),
-		gnome_canvas_text_get_type(),
-		"text", missions_get_name(mission),
-		"x", (double) 4,
-		"y", (double) 10,
-		"x_offset", (double) -1,
-		"y_offset", (double) -1,
-		"font", HELVETICA_12_FONT,
-		"fill_color", "brown",
-		"anchor",GTK_ANCHOR_NW,
-		NULL);
+	/* Creamos etiquetas para el texto */
+	label1 = gtk_label_new(missions_get_name(mission));
 
 	text = _("[Accomplished mission]");
+	label2 = gtk_label_new(text);
 
-	imagetxt2 = gnome_canvas_item_new(
-		gnome_canvas_root(GNOME_CANVAS(canvas)),
-		gnome_canvas_text_get_type(),
-		"text",text,
-		"x", (double) 4,
-		"y", (double) 124,
-		"x_offset", (double) -1,
-		"y_offset", (double) -1,
-		"font", HELVETICA_10_FONT,
-		"fill_color", "brown",
-		"anchor",GTK_ANCHOR_NW,
-		NULL);
+	/* Creamos un contenedor vertical */
+	GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+	gtk_box_pack_start(GTK_BOX(vbox), image_widget, FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(vbox), label1, FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(vbox), label2, FALSE, FALSE, 0);
 
-	gtk_container_add (GTK_CONTAINER (frame),GTK_WIDGET(canvas));
+	gtk_container_add(GTK_CONTAINER(frame), vbox);
 
 	return TEG_STATUS_SUCCESS;
 }
@@ -242,59 +171,93 @@ void mission_view_next( GtkWidget *button, gpointer data )
 /* funciones de creacion */
 void mission_view()
 {
-	static GtkWidget *dialog=NULL;
+	static GtkWidget *dialog = NULL;
+	static GtkWidget *button_prev = NULL;
+	static GtkWidget *button_next = NULL;
 
-
-	if( g_game.secret_mission < 0 ) {
-		textmsg(M_INF,_("Requesting a mission..."));
+	if (g_game.secret_mission < 0) {
+		textmsg(M_INF, _("Requesting a mission..."));
 		out_missions();
 		return;
 	}
 
 	mission_number = g_game.secret_mission;
 
-	if( tar_mission == NULL ) {
-		if( mission_load() != TEG_STATUS_SUCCESS ) {
-			textmsg(M_INF,_("Your mission is: %s"), missions_get_name( mission_number ));
+	if (tar_mission == NULL) {
+		if (mission_load() != TEG_STATUS_SUCCESS) {
+			textmsg(M_INF, _("Your mission is: %s"), missions_get_name(mission_number));
 			return;
 		}
 	}
-	
 
-	if( dialog == NULL ) {
+	if (dialog == NULL) {
+		/* GTK3: Crear ventana */
+		dialog = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+		gtk_window_set_title(GTK_WINDOW(dialog), _("Secret mission"));
+		gtk_window_set_default_size(GTK_WINDOW(dialog), 450, 350);
+		gtk_container_set_border_width(GTK_CONTAINER(dialog), 10);
+		
+		/* Hacer que aparezca sobre la ventana principal */
+		if (main_window) {
+			gtk_window_set_transient_for(GTK_WINDOW(dialog), GTK_WINDOW(main_window));
+		}
+		gtk_window_set_position(GTK_WINDOW(dialog), GTK_WIN_POS_CENTER);
+		gtk_window_set_keep_above(GTK_WINDOW(dialog), TRUE);
 
-		dialog = teg_dialog_new(_("Secret mission"),_("Your mission")); 
-		gnome_dialog_append_buttons(GNOME_DIALOG(dialog),
-				GNOME_STOCK_BUTTON_PREV,
-				GNOME_STOCK_BUTTON_NEXT,
-				GNOME_STOCK_BUTTON_CLOSE,
-				NULL );
-		gnome_dialog_close_hides( GNOME_DIALOG(dialog), TRUE );
-		gnome_dialog_set_default(GNOME_DIALOG(dialog),2);
+		g_signal_connect(dialog, "destroy", G_CALLBACK(gtk_widget_destroyed), &dialog);
 
-		/* signals de los botones */
-		gnome_dialog_button_connect (GNOME_DIALOG(dialog),
-						0, GTK_SIGNAL_FUNC(mission_view_prev),dialog);
-		gnome_dialog_button_connect (GNOME_DIALOG(dialog),
-						1, GTK_SIGNAL_FUNC(mission_view_next),dialog);
-		gnome_dialog_button_connect (GNOME_DIALOG(dialog),
-						2, GTK_SIGNAL_FUNC(dialog_close), dialog );
+		/* Contenedor principal */
+		GtkWidget *main_vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
+		gtk_container_add(GTK_CONTAINER(dialog), main_vbox);
 
-		/* create picture of card (canvas with labels) */
+		/* Área de contenido de la misión */
+		GtkWidget *content_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+		gtk_box_pack_start(GTK_BOX(main_vbox), content_box, TRUE, TRUE, 0);
 
+		/* Imagen de la misión */
+		mission_image = gtk_image_new_from_pixbuf(tar_mission);
+		gtk_box_pack_start(GTK_BOX(content_box), mission_image, FALSE, FALSE, 5);
+
+		/* Etiqueta con el nombre de la misión */
+		mission_label1 = gtk_label_new(missions_get_name(mission_number));
+		gtk_label_set_line_wrap(GTK_LABEL(mission_label1), TRUE);
+		gtk_label_set_justify(GTK_LABEL(mission_label1), GTK_JUSTIFY_CENTER);
+		gtk_box_pack_start(GTK_BOX(content_box), mission_label1, FALSE, FALSE, 5);
+
+		/* Etiqueta secundaria */
+		mission_label2 = gtk_label_new("");
+		gtk_box_pack_start(GTK_BOX(content_box), mission_label2, FALSE, FALSE, 5);
+
+		/* Botones de navegación */
+		GtkWidget *button_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+		gtk_widget_set_halign(button_box, GTK_ALIGN_CENTER);
+		gtk_box_pack_end(GTK_BOX(main_vbox), button_box, FALSE, FALSE, 0);
+
+		button_prev = gtk_button_new_with_label(_("Previous"));
+		button_next = gtk_button_new_with_label(_("Next"));
+		GtkWidget *button_close = gtk_button_new_with_label(_("Close"));
+
+		gtk_box_pack_start(GTK_BOX(button_box), button_prev, FALSE, FALSE, 5);
+		gtk_box_pack_start(GTK_BOX(button_box), button_next, FALSE, FALSE, 5);
+		gtk_box_pack_start(GTK_BOX(button_box), button_close, FALSE, FALSE, 5);
+
+		g_signal_connect(button_prev, "clicked", G_CALLBACK(mission_view_prev), dialog);
+		g_signal_connect(button_next, "clicked", G_CALLBACK(mission_view_next), dialog);
+		g_signal_connect_swapped(button_close, "clicked", G_CALLBACK(gtk_widget_destroy), dialog);
 	}
 
-	if( g_game.secret_mission == MISSION_CONQWORLD ) {
-		gnome_dialog_set_sensitive( GNOME_DIALOG(dialog),0,FALSE);
-		gnome_dialog_set_sensitive( GNOME_DIALOG(dialog),1,FALSE);
+	/* Habilitar/deshabilitar botones según la misión */
+	if (g_game.secret_mission == MISSION_CONQWORLD) {
+		if (button_prev) gtk_widget_set_sensitive(button_prev, FALSE);
+		if (button_next) gtk_widget_set_sensitive(button_next, FALSE);
 	} else {
-		gnome_dialog_set_sensitive( GNOME_DIALOG(dialog),0,TRUE);
-		gnome_dialog_set_sensitive( GNOME_DIALOG(dialog),1,TRUE);
+		if (button_prev) gtk_widget_set_sensitive(button_prev, TRUE);
+		if (button_next) gtk_widget_set_sensitive(button_next, TRUE);
 	}
-	gnome_dialog_set_default( GNOME_DIALOG(dialog),2);
 
-	mission_view_number( dialog );
+	/* Actualizar contenido */
+	mission_update_content();
 
 	gtk_widget_show_all(dialog);
-	raise_and_focus(dialog);
+	gtk_window_present(GTK_WINDOW(dialog));
 }

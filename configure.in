@@ -1,7 +1,7 @@
 dnl configure.ac for teg
-AC_PREREQ([2.53])
+AC_PREREQ([2.72])
 
-AC_INIT([Tenes Empanadas Graciela], [0.11.2], [teg-list@lists.sourceforge.net], [teg])
+AC_INIT([Tenes Empanadas Graciela],[0.11.2],[teg-list@lists.sourceforge.net],[teg])
 AM_INIT_AUTOMAKE
 AC_CONFIG_SRCDIR([server/main.c])
 AC_CONFIG_MACRO_DIR([macros])
@@ -12,9 +12,13 @@ AM_MAINTAINER_MODE
 AC_PROG_CC
 AC_PROG_CPP
 AC_PROG_CXX
-AC_PROG_INTLTOOL([0.29])
-AC_PROG_LIBTOOL
+AC_PATH_PROG([PYTHON], [python3], [python3])
+IT_PROG_INTLTOOL([0.29])
+LT_INIT
 AC_PROG_LN_S
+
+# Check for pkg-config
+PKG_PROG_PKG_CONFIG
 
 
 dnl
@@ -80,6 +84,8 @@ AC_ARG_ENABLE(client,
   no)  client=false ;;
   *)   AC_MSG_ERROR(bad value ${enableval} for --disable-client) ;;
 esac], [client=true])
+AC_MSG_NOTICE([CLIENT variable: $client])
+AC_MSG_NOTICE([Testing condition: test x$client = xtrue])
 AM_CONDITIONAL(CLIENT, test x$client = xtrue)
 
 dnl
@@ -96,27 +102,12 @@ esac], [ggz=true])
 
 
 dnl
-dnl GCONF stuff
+dnl GSettings stuff (replaces GConf)
 dnl
-dnl Specify the gconf configuration source,
-dnl use specific location for SUSE Linux 10.0 if it exists and no value was given
-dnl default to xml::$(sysconfdir)/gconf/gconf.xml.defaults
-GCONF_CONFIG_SOURCE=
 
-if test -d "/etc/opt/gnome/gconf/gconf.xml.defaults"; then
-        GCONF_CONFIG_SOURCE="xml::/etc/opt/gnome/gconf/gconf.xml.defaults"
-fi
-
-AC_ARG_ENABLE(gconf-source, [  --enable-gconf-source=sourceaddress Where to install schema files.], GCONF_CONFIG_SOURCE=$enable_gconf_source,)
-
-if test "x$GCONF_CONFIG_SOURCE" = "x"; then
-	GCONF_CONFIG_SOURCE="xml::\${sysconfdir}/gconf/gconf.xml.defaults"
-fi
-
-AC_SUBST(GCONF_CONFIG_SOURCE)
-AC_SUBST(INSTALL_GCONF_CONFIG_SOURCE)
-
-AC_PATH_PROG(GCONFTOOL, gconftool-2)
+# Check for glib-compile-schemas (replaces gconftool-2)
+AC_PATH_PROG(GLIB_COMPILE_SCHEMAS, glib-compile-schemas)
+AC_SUBST(GLIB_COMPILE_SCHEMAS)
 
 
 dnl does the robot needs something special ???
@@ -124,10 +115,24 @@ dnl if test x$robot = xtrue; then
 dnl fi
 
 if test x$client = xtrue; then
-	PKG_CHECK_MODULES(TEG_LIBGNOME, libgnomeui-2.0)
+	PKG_CHECK_MODULES(TEG_LIBGNOME, gtk+-3.0)
 	AC_SUBST(TEG_LIBGNOME_CFLAGS)
 	AC_SUBST(TEG_LIBGNOME_LIBS)
 fi
+
+# Check for Python 3
+# AM_PATH_PYTHON([3.0]) - commented out due to autoconf compatibility issues
+# Define Python directories manually
+pythondir='${prefix}/lib/python3/site-packages'
+pyexecdir='${exec_prefix}/lib/python3/site-packages'
+pkgpythondir='${pythondir}/teg'
+pkgpyexecdir='${pyexecdir}/teg'
+AC_SUBST(pythondir)
+AC_SUBST(pyexecdir)
+AC_SUBST(pkgpythondir)
+AC_SUBST(pkgpyexecdir)
+AC_SUBST(PYTHON_CFLAGS)
+AC_SUBST(PYTHON_LIBS)
 
 
 if test "x$ggz" = "xtrue"; then
@@ -233,7 +238,15 @@ AC_CHECK_LIB(c, inet_ntop, [AC_DEFINE([HAVE_INET_NTOP], 1, [Check for ntop avail
 AC_CHECK_LIB(nls,main)
 
 dnl Checks for header files.
-AC_HEADER_STDC
+m4_warn([obsolete],
+[The preprocessor macro 'STDC_HEADERS' is obsolete.
+  Except in unusual embedded environments, you can safely include all
+  C89 headers unconditionally.])dnl
+# Autoupdate added the next two lines to ensure that your configure
+# script's behavior did not change.  They are probably safe to remove.
+AC_CHECK_INCLUDES_DEFAULT
+AC_PROG_EGREP
+
 AC_CHECK_HEADERS(arpa/inet.h netdb.h netinet/in.h pwd.h sys/ioctl.h \
                  sys/select.h sys/signal.h sys/socket.h sys/termio.h \
 		 sys/time.h sys/types.h sys/uio.h termios.h unistd.h)
@@ -241,11 +254,36 @@ AC_CHECK_HEADERS(arpa/inet.h netdb.h netinet/in.h pwd.h sys/ioctl.h \
 
 dnl Checks for typedefs, structures, and compiler characteristics.
 AC_C_CONST
-AC_HEADER_TIME
+m4_warn([obsolete],
+[Update your code to rely only on HAVE_SYS_TIME_H,
+then remove this warning and the obsolete code below it.
+All current systems provide time.h; it need not be checked for.
+Not all systems provide sys/time.h, but those that do, all allow
+you to include it and time.h simultaneously.])dnl
+AC_CHECK_HEADERS_ONCE([sys/time.h])
+# Obsolete code to be removed.
+if test $ac_cv_header_sys_time_h = yes; then
+  AC_DEFINE([TIME_WITH_SYS_TIME],[1],[Define to 1 if you can safely include both <sys/time.h>
+	     and <time.h>.  This macro is obsolete.])
+fi
+# End of obsolete code.
+
 AC_STRUCT_TM
 
 dnl Checks for library functions.
-AC_TYPE_SIGNAL
+m4_warn([obsolete],
+[your code may safely assume C89 semantics that RETSIGTYPE is void.
+Remove this warning and the 'AC_CACHE_CHECK' when you adjust the code.])dnl
+AC_CACHE_CHECK([return type of signal handlers],[ac_cv_type_signal],[AC_COMPILE_IFELSE(
+[AC_LANG_PROGRAM([#include <sys/types.h>
+#include <signal.h>
+],
+		 [return *(signal (0, 0)) (0) == 1;])],
+		   [ac_cv_type_signal=int],
+		   [ac_cv_type_signal=void])])
+AC_DEFINE_UNQUOTED([RETSIGTYPE],[$ac_cv_type_signal],[Define as the return type of signal handlers
+		    ('int' or 'void').])
+
 AC_FUNC_VPRINTF
 AC_CHECK_FUNCS(fdopen gethostname getpwuid gettimeofday select \
                strerror strlcat strlcpy strstr usleep vsnprintf)
@@ -303,6 +341,7 @@ AC_CONFIG_FILES([
 	ggz/teg.dsc
 	ggz/tegclient.dsc
 	metaserver/Makefile
+	python/Makefile
 	])
 AC_OUTPUT
 

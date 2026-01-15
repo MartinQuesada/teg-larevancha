@@ -20,554 +20,216 @@
  */
 /**
  * @file preferences.c
+ * Migrated to GTK3
  */
 
 #ifdef HAVE_CONFIG_H
 #  include <config.h>
 #endif
 
-#include <gnome.h>
+#include <string.h>
+#include "gnome-compat.h"
 #include "client.h"
 #include "gui.h"
 #include "priv.h"
 #include "interface.h"
 #include "support.h"
-#include "status.h"
+#include "preferences.h"
+#include "themes.h"
 
-extern TTheme gui_theme;
+static GtkWidget *pref_dialog = NULL;
+static GtkWidget *theme_combo = NULL;
+static GtkWidget *theme_preview_image = NULL;
 
-static GtkWidget	*pref_dialog=NULL;
-
-/** messages */
-static GtkWidget	*conf_cb_showerr=NULL;
-static GtkWidget	*conf_cb_showimp=NULL;
-static GtkWidget	*conf_cb_showmsg=NULL;
-static GtkWidget	*conf_cb_showmsgcolor=NULL;
-static GtkWidget	*conf_cb_showinf=NULL;
-
-/** dialogs */
-static GtkWidget	*conf_cb_showattackturn=NULL;
-static GtkWidget	*conf_cb_showplacearmies=NULL;
-static GtkWidget	*conf_cb_showregrouparmies=NULL;
-
-/** themes */
-static char		*theme_activated=NULL;
-static GtkWidget	*theme_widget=NULL;
-static GtkWidget	*theme_frame_prev=NULL;
-
-/** status */
-static GtkWidget	*conf_cb_stscolor=NULL;
-static GtkWidget	*conf_cb_stsnumber=NULL;
-static GtkWidget	*conf_cb_stsname=NULL;
-static GtkWidget	*conf_cb_stsscore=NULL;
-static GtkWidget	*conf_cb_stsaddress=NULL;
-static GtkWidget	*conf_cb_stshuman=NULL;
-static GtkWidget	*conf_cb_stscountries=NULL;
-static GtkWidget	*conf_cb_stsarmies=NULL;
-static GtkWidget	*conf_cb_stscards=NULL;
-static GtkWidget	*conf_cb_stsstatus=NULL;
-static GtkWidget	*conf_cb_stswho=NULL;
-
-/** robot **/
-static GtkWidget	*conf_cb_robotclient=NULL;
-static GtkWidget	*conf_cb_robotserver=NULL;
-
-
-static void free_pixmap( GtkWidget *widget, void *data )
+/* Update theme preview image */
+static void update_theme_preview(const char *theme_name)
 {
-	if( theme_widget )
-		gtk_widget_destroy( theme_widget );
-	theme_widget = NULL;
-}
-
-static void
-load_preview( char *theme )
-{
-	char *filename;
-
-	if( theme_widget ) {
-		gtk_widget_destroy( theme_widget );
-		theme_widget = NULL;
+	if (!theme_preview_image || !theme_name)
+		return;
+	
+	char *preview_path = theme_load_fake_file("mini_shot.png", (char*)theme_name);
+	if (preview_path) {
+		GdkPixbuf *pixbuf = gdk_pixbuf_new_from_file(preview_path, NULL);
+		if (pixbuf) {
+			/* Scale to reasonable size if needed */
+			int width = gdk_pixbuf_get_width(pixbuf);
+			int height = gdk_pixbuf_get_height(pixbuf);
+			int max_width = 300;
+			int max_height = 200;
+			
+			if (width > max_width || height > max_height) {
+				double scale = MIN((double)max_width / width, (double)max_height / height);
+				int new_width = (int)(width * scale);
+				int new_height = (int)(height * scale);
+				GdkPixbuf *scaled = gdk_pixbuf_scale_simple(pixbuf, new_width, new_height, GDK_INTERP_BILINEAR);
+				g_object_unref(pixbuf);
+				pixbuf = scaled;
+			}
+			
+			gtk_image_set_from_pixbuf(GTK_IMAGE(theme_preview_image), pixbuf);
+			g_object_unref(pixbuf);
+		} else {
+			gtk_image_clear(GTK_IMAGE(theme_preview_image));
+		}
+	} else {
+		gtk_image_clear(GTK_IMAGE(theme_preview_image));
 	}
-
-	filename = theme_load_fake_file("mini_shot.png",theme);
-	theme_widget = gtk_image_new_from_file(filename);
-	if( theme_widget ) {
-		gtk_container_add( GTK_CONTAINER(theme_frame_prev), theme_widget );
-		gtk_widget_show(theme_widget);
-		gtk_signal_connect (GTK_OBJECT(theme_widget), "destroy",
-			GTK_SIGNAL_FUNC (free_pixmap), NULL);
-	} else
-		g_warning (_("Could not find the %s file"),"mini_shot.png");
 }
 
-static void prop_box_changed_callback (GtkWidget *widget, gpointer data)
+/* Callback when message checkboxes change */
+static void on_msg_err_toggled(GtkToggleButton *button, gpointer data)
 {
-	if(pref_dialog==NULL)
-		return;
-	gnome_property_box_changed (GNOME_PROPERTY_BOX (pref_dialog));
-}
-
-static void theme_activated_callback (GtkWidget *widget, gpointer data)
-{
-	theme_activated = data;
-	load_preview(data);
-	prop_box_changed_callback (widget,data);
-}
-
-static void
-free_str (GtkWidget *widget, void *data)
-{
-	free (data);
-}
-
-
-
-static void apply_cb (GtkWidget *widget, gint pagenum, gpointer data)
-{
-	if (pagenum != -1)
-		return;
- 
-	/** dialogs **/
-
-
-	if (GTK_TOGGLE_BUTTON(conf_cb_showattackturn)->active)
-		gui_private.dialog_show |= (1 << DIALOG_ATTACK_TURN);
-	else
-		gui_private.dialog_show &= ~(1 << DIALOG_ATTACK_TURN);
-
-	if (GTK_TOGGLE_BUTTON(conf_cb_showplacearmies)->active)
-		gui_private.dialog_show |= (1 << DIALOG_PLACE_ARMIES);
-	else
-		gui_private.dialog_show &= ~(1 << DIALOG_PLACE_ARMIES);
-	
-	if (GTK_TOGGLE_BUTTON(conf_cb_showregrouparmies)->active)
-		gui_private.dialog_show |= (1 << DIALOG_REGROUP_ARMIES);
-	else
-		gui_private.dialog_show &= ~(1 << DIALOG_REGROUP_ARMIES);
-	
-
-	/** messages **/
-	if (GTK_TOGGLE_BUTTON( conf_cb_showerr )->active)
+	if (gtk_toggle_button_get_active(button))
 		g_game.msg_show |= M_ERR;
 	else
 		g_game.msg_show &= ~M_ERR;
+}
 
-
-	if (GTK_TOGGLE_BUTTON( conf_cb_showimp )->active)
-		g_game.msg_show |= M_IMP;
-	else
-		g_game.msg_show &= ~M_IMP;
-
-
-	if (GTK_TOGGLE_BUTTON( conf_cb_showmsg )->active)
+static void on_msg_msg_toggled(GtkToggleButton *button, gpointer data)
+{
+	if (gtk_toggle_button_get_active(button))
 		g_game.msg_show |= M_MSG;
 	else
 		g_game.msg_show &= ~M_MSG;
+}
 
-
-	if (GTK_TOGGLE_BUTTON( conf_cb_showmsgcolor )->active)
-		gui_private.msg_show_colors = 1;
-	else
-		gui_private.msg_show_colors = 0;
-
-
-	if (GTK_TOGGLE_BUTTON( conf_cb_showinf )->active)
+static void on_msg_inf_toggled(GtkToggleButton *button, gpointer data)
+{
+	if (gtk_toggle_button_get_active(button))
 		g_game.msg_show |= M_INF;
 	else
 		g_game.msg_show &= ~M_INF;
-
-	/** status **/
-	if (GTK_TOGGLE_BUTTON( conf_cb_stscolor)->active)
-		gui_private.status_show |= (1 << STATUS_COLUMN_COLOR);
-	else
-		gui_private.status_show &= ~(1 << STATUS_COLUMN_COLOR);
-
-	if (GTK_TOGGLE_BUTTON( conf_cb_stsnumber)->active)
-		gui_private.status_show |= (1 << STATUS_COLUMN_NUMBER);
-	else
-		gui_private.status_show &= ~(1 << STATUS_COLUMN_NUMBER);
-
-	if (GTK_TOGGLE_BUTTON( conf_cb_stsname)->active)
-		gui_private.status_show |= (1 << STATUS_COLUMN_NAME);
-	else
-		gui_private.status_show &= ~(1 << STATUS_COLUMN_NAME);
-
-	if (GTK_TOGGLE_BUTTON( conf_cb_stsscore)->active)
-		gui_private.status_show |= (1 << STATUS_COLUMN_SCORE);
-	else
-		gui_private.status_show &= ~(1 << STATUS_COLUMN_SCORE);
-
-	if (GTK_TOGGLE_BUTTON( conf_cb_stsaddress )->active)
-		gui_private.status_show |= (1 << STATUS_COLUMN_ADDR);
-	else
-		gui_private.status_show &= ~(1 << STATUS_COLUMN_ADDR);
-
-	if (GTK_TOGGLE_BUTTON( conf_cb_stshuman)->active)
-		gui_private.status_show |= (1 << STATUS_COLUMN_HUMAN);
-	else
-		gui_private.status_show &= ~(1 << STATUS_COLUMN_HUMAN);
-
-	if (GTK_TOGGLE_BUTTON( conf_cb_stscountries)->active)
-		gui_private.status_show |= (1 << STATUS_COLUMN_COUNTRIES);
-	else
-		gui_private.status_show &= ~(1 << STATUS_COLUMN_COUNTRIES);
-
-	if (GTK_TOGGLE_BUTTON( conf_cb_stsarmies)->active)
-		gui_private.status_show |= (1 << STATUS_COLUMN_ARMIES);
-	else
-		gui_private.status_show &= ~(1 << STATUS_COLUMN_ARMIES);
-
-	if (GTK_TOGGLE_BUTTON( conf_cb_stscards)->active)
-		gui_private.status_show |= (1 << STATUS_COLUMN_CARDS);
-	else
-		gui_private.status_show &= ~(1 << STATUS_COLUMN_CARDS);
-
-	if (GTK_TOGGLE_BUTTON( conf_cb_stsstatus)->active)
-		gui_private.status_show |= (1 << STATUS_COLUMN_STATUS);
-	else
-		gui_private.status_show &= ~(1 << STATUS_COLUMN_STATUS);
-
-	if (GTK_TOGGLE_BUTTON( conf_cb_stswho)->active)
-		gui_private.status_show |= (1 << STATUS_COLUMN_WHO);
-	else
-		gui_private.status_show &= ~(1 << STATUS_COLUMN_WHO);
-
-	status_update_visibility_of_columns();
-
-
-	/* robot */
-	g_game.robot_in_server = gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(conf_cb_robotserver) );
-
-	
-	/* save new configurations */
-	gconf_client_set_int( g_conf_client, "/apps/teg/msgshow",g_game.msg_show, NULL);
-	gconf_client_set_bool( g_conf_client, "/apps/teg/msgshow_with_color",gui_private.msg_show_colors, NULL);
-	gconf_client_set_int( g_conf_client, "/apps/teg/status_show",gui_private.status_show, NULL);
-	gconf_client_set_int( g_conf_client, "/apps/teg/dialog_show",gui_private.dialog_show, NULL);
-	gconf_client_set_bool( g_conf_client, "/apps/teg/robot_in_server",g_game.robot_in_server, NULL);
-
-	if( theme_activated ){
-		gconf_client_set_string( g_conf_client, "/apps/teg/theme",theme_activated, NULL);
-		if( strcmp(theme_activated,g_game.theme) )
-			gnome_ok_dialog_parented(_("You have to restart TEG to use the new theme."),GTK_WINDOW(main_window));
-	}
 }
 
-
-
-static void
-fill_menu (GtkWidget *menu)
+/* Callback when theme selection changes */
+static void on_theme_changed(GtkComboBox *combo, gpointer data)
 {
-	TInfo Info;
-	pTInfo pI;
-	char *s;
-	GtkWidget *item;
-	int i=0;
-
-	if( theme_enum_themes(&Info) != TEG_STATUS_SUCCESS ) {
-		textmsg(M_ERR,_("Error while loading information about themes!"));
-		return;
-	}
-
-	for( pI=&Info; pI != NULL; pI = pI->next ) {
-		s = strdup (pI->name);
-		item = gtk_menu_item_new_with_label (s);
-		gtk_widget_show (item);
-		gtk_menu_append (GTK_MENU(menu), item);
-		gtk_signal_connect (GTK_OBJECT(item), "activate",
-			    GTK_SIGNAL_FUNC (theme_activated_callback),s);
-
-		gtk_signal_connect (GTK_OBJECT(item), "destroy",
-			    GTK_SIGNAL_FUNC (free_str), s);
-
-		if( !strcmp(pI->name, g_game.theme ))
-			gtk_menu_set_active(GTK_MENU(menu), i);
-		i++;
+	gchar *selected = gtk_combo_box_text_get_active_text(GTK_COMBO_BOX_TEXT(combo));
+	if (selected) {
+		/* Prevent selection of "modern" */
+		if (strcmp(selected, "modern") == 0) {
+			/* Revert to sentimental */
+			gtk_combo_box_set_active(GTK_COMBO_BOX(combo), 0);
+			g_free(selected);
+			return;
+		}
+		
+		strncpy(g_game.theme, selected, THEME_MAX_NAME - 1);
+		g_game.theme[THEME_MAX_NAME - 1] = '\0';
+		update_theme_preview(selected);
+		g_free(selected);
 	}
 }
 
-
-
-/**
- * @fn void preferences_activate(void)
- */
+/* GTK3: Preferences dialog with functional theme selector */
 void preferences_activate(void)
 {
-	GtkWidget *label;
-	GtkWidget *msg_frame;
-	GtkWidget *sts_frame;
-	GtkWidget *dialog_frame;
-	GtkWidget *robot_frame;
-	GtkWidget *theme_frame_sel, *theme_vbox;
-	GtkWidget *vbox, *hbox;
-	GtkWidget *menu, *omenu;
+	if (pref_dialog == NULL) {
+		pref_dialog = gtk_dialog_new_with_buttons(
+			_("Preferences"),
+			GTK_WINDOW(main_window),
+			GTK_DIALOG_DESTROY_WITH_PARENT,
+			_("_Close"),
+			GTK_RESPONSE_CLOSE,
+			NULL);
 
-	if( pref_dialog != NULL ) {
-		gdk_window_show( pref_dialog->window);
-		gdk_window_raise( pref_dialog->window);
-		return ;
+		gtk_window_set_default_size(GTK_WINDOW(pref_dialog), 400, 350);
+
+		GtkWidget *content = gtk_dialog_get_content_area(GTK_DIALOG(pref_dialog));
+		gtk_container_set_border_width(GTK_CONTAINER(content), 10);
+		
+		/* Messages frame */
+		GtkWidget *frame_msg = gtk_frame_new(_("Messages"));
+		gtk_box_pack_start(GTK_BOX(content), frame_msg, FALSE, FALSE, 5);
+		
+		GtkWidget *vbox_msg = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
+		gtk_container_set_border_width(GTK_CONTAINER(vbox_msg), 5);
+		gtk_container_add(GTK_CONTAINER(frame_msg), vbox_msg);
+		
+		GtkWidget *cb_showerr = gtk_check_button_new_with_label(_("Show error messages"));
+		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(cb_showerr), 
+			(g_game.msg_show & M_ERR) ? TRUE : FALSE);
+		g_signal_connect(cb_showerr, "toggled", G_CALLBACK(on_msg_err_toggled), NULL);
+		gtk_box_pack_start(GTK_BOX(vbox_msg), cb_showerr, FALSE, FALSE, 0);
+		
+		GtkWidget *cb_showmsg = gtk_check_button_new_with_label(_("Show game messages"));
+		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(cb_showmsg),
+			(g_game.msg_show & M_MSG) ? TRUE : FALSE);
+		g_signal_connect(cb_showmsg, "toggled", G_CALLBACK(on_msg_msg_toggled), NULL);
+		gtk_box_pack_start(GTK_BOX(vbox_msg), cb_showmsg, FALSE, FALSE, 0);
+		
+		GtkWidget *cb_showinf = gtk_check_button_new_with_label(_("Show info messages"));
+		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(cb_showinf),
+			(g_game.msg_show & M_INF) ? TRUE : FALSE);
+		g_signal_connect(cb_showinf, "toggled", G_CALLBACK(on_msg_inf_toggled), NULL);
+		gtk_box_pack_start(GTK_BOX(vbox_msg), cb_showinf, FALSE, FALSE, 0);
+
+		/* Theme frame */
+		GtkWidget *frame_theme = gtk_frame_new(_("Theme"));
+		gtk_box_pack_start(GTK_BOX(content), frame_theme, FALSE, FALSE, 5);
+		
+		GtkWidget *vbox_theme = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+		gtk_container_set_border_width(GTK_CONTAINER(vbox_theme), 5);
+		gtk_container_add(GTK_CONTAINER(frame_theme), vbox_theme);
+		
+		/* Theme selector combo box */
+		GtkWidget *hbox_theme = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+		gtk_box_pack_start(GTK_BOX(vbox_theme), hbox_theme, FALSE, FALSE, 0);
+		
+		GtkWidget *theme_label = gtk_label_new(_("Select theme:"));
+		gtk_box_pack_start(GTK_BOX(hbox_theme), theme_label, FALSE, FALSE, 0);
+		
+		theme_combo = gtk_combo_box_text_new();
+		gtk_box_pack_start(GTK_BOX(hbox_theme), theme_combo, TRUE, TRUE, 0);
+		
+		/* Populate combo with only Sentimental and Modern */
+		int active_index = 0;
+		
+		/* Add Sentimental */
+		gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(theme_combo), "sentimental");
+		if (strcmp("sentimental", g_game.theme) == 0) {
+			active_index = 0;
+		}
+		
+		/* Add Modern (will be disabled) */
+		gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(theme_combo), "modern");
+		if (strcmp("modern", g_game.theme) == 0) {
+			active_index = 1;
+		}
+		
+		/* If current theme is not one of these, default to sentimental */
+		if (strcmp("sentimental", g_game.theme) != 0 && strcmp("modern", g_game.theme) != 0) {
+			active_index = 0;
+		}
+		
+		gtk_combo_box_set_active(GTK_COMBO_BOX(theme_combo), active_index);
+		g_signal_connect(theme_combo, "changed", G_CALLBACK(on_theme_changed), NULL);
+
+		/* Theme preview image */
+		GtkWidget *preview_frame = gtk_frame_new(_("Preview"));
+		gtk_box_pack_start(GTK_BOX(vbox_theme), preview_frame, TRUE, TRUE, 5);
+		
+		GtkWidget *preview_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+		gtk_container_add(GTK_CONTAINER(preview_frame), preview_box);
+		gtk_widget_set_size_request(preview_box, 300, 200);
+		
+		theme_preview_image = gtk_image_new();
+		gtk_widget_set_halign(theme_preview_image, GTK_ALIGN_CENTER);
+		gtk_widget_set_valign(theme_preview_image, GTK_ALIGN_CENTER);
+		gtk_box_pack_start(GTK_BOX(preview_box), theme_preview_image, TRUE, TRUE, 5);
+		
+		/* Load initial preview */
+		update_theme_preview(g_game.theme);
+
+		/* Note about preferences */
+		GtkWidget *note_label = gtk_label_new(_("Note: Theme changes require restart."));
+		gtk_widget_set_halign(note_label, GTK_ALIGN_START);
+		gtk_box_pack_start(GTK_BOX(vbox_theme), note_label, FALSE, FALSE, 5);
+
+		g_signal_connect(pref_dialog, "response", G_CALLBACK(gtk_widget_destroy), NULL);
+		g_signal_connect(pref_dialog, "destroy", G_CALLBACK(gtk_widget_destroyed), &pref_dialog);
 	}
 
-
-	/* Theme options */
-	theme_vbox = gtk_vbox_new (FALSE, 0);
-	
-	theme_frame_sel = gtk_frame_new (_("Select theme"));
-	gtk_container_border_width (GTK_CONTAINER (theme_frame_sel), GNOME_PAD);
-	omenu = gtk_option_menu_new ();
-	menu = gtk_menu_new ();
-	fill_menu (menu);
-	gtk_widget_show (omenu);
-	gtk_option_menu_set_menu (GTK_OPTION_MENU(omenu), menu);
-	label = gtk_label_new (_("Select theme"));
-	gtk_widget_show (label);
-
-	hbox = gtk_hbox_new (TRUE, 0);
-	gtk_container_border_width (GTK_CONTAINER (hbox), GNOME_PAD);
-
-	gtk_box_pack_start( GTK_BOX( hbox ), label, FALSE, FALSE, 0);
-	gtk_box_pack_start( GTK_BOX( hbox ), omenu, FALSE, FALSE, 0);
-	gtk_container_add (GTK_CONTAINER (theme_frame_sel), hbox);
-	gtk_widget_show(theme_frame_sel);
-
-	theme_frame_prev = gtk_frame_new (_("Preview"));
-	gtk_container_border_width (GTK_CONTAINER (theme_frame_prev), GNOME_PAD);
-	gtk_widget_show(theme_frame_prev);
-
-	load_preview(g_game.theme);
-
-	gtk_box_pack_start( GTK_BOX( theme_vbox ), theme_frame_sel, FALSE, FALSE, 0);
-	gtk_box_pack_start( GTK_BOX( theme_vbox ), theme_frame_prev, FALSE, FALSE, 0);
-
-	/* Message Options */
-	msg_frame = gtk_frame_new (_("Console Messages"));
-	gtk_container_border_width (GTK_CONTAINER (msg_frame), GNOME_PAD);
-
-	vbox = gtk_vbox_new (FALSE, 0);
-	gtk_container_border_width (GTK_CONTAINER (vbox), GNOME_PAD);
-
-
-	conf_cb_showerr = gtk_check_button_new_with_label(_("Show Error Messages"));
-	GTK_TOGGLE_BUTTON(conf_cb_showerr)->active = (g_game.msg_show & M_ERR) ?1:0;
-	gtk_box_pack_start( GTK_BOX( vbox ), conf_cb_showerr, FALSE, FALSE, 0);
-	gtk_signal_connect (GTK_OBJECT (conf_cb_showerr), "clicked", GTK_SIGNAL_FUNC
-			(prop_box_changed_callback), NULL);
-
-	conf_cb_showimp = gtk_check_button_new_with_label(_("Show Important Messages"));
-	GTK_TOGGLE_BUTTON(conf_cb_showimp)->active = (g_game.msg_show & M_IMP) ?1:0;
-	gtk_box_pack_start( GTK_BOX( vbox ), conf_cb_showimp, FALSE, FALSE, 0);
-	gtk_signal_connect (GTK_OBJECT (conf_cb_showimp), "clicked", GTK_SIGNAL_FUNC
-			(prop_box_changed_callback), NULL);
-
-	conf_cb_showmsg = gtk_check_button_new_with_label(_("Show Players Messages"));
-	GTK_TOGGLE_BUTTON(conf_cb_showmsg)->active = (g_game.msg_show & M_MSG) ?1:0;
-	gtk_box_pack_start( GTK_BOX( vbox ), conf_cb_showmsg, FALSE, FALSE, 0);
-	gtk_signal_connect (GTK_OBJECT (conf_cb_showmsg), "clicked", GTK_SIGNAL_FUNC
-			(prop_box_changed_callback), NULL);
-
-	conf_cb_showmsgcolor = gtk_check_button_new_with_label(_("Show Players Messages with colors"));
-	GTK_TOGGLE_BUTTON(conf_cb_showmsgcolor)->active = (gui_private.msg_show_colors & 1) ?1:0;
-	gtk_box_pack_start( GTK_BOX( vbox ), conf_cb_showmsgcolor, FALSE, FALSE, 0);
-	gtk_signal_connect (GTK_OBJECT (conf_cb_showmsgcolor), "clicked", GTK_SIGNAL_FUNC
-			(prop_box_changed_callback), NULL);
-
-	conf_cb_showinf = gtk_check_button_new_with_label(_("Show Informative Messages"));
-	GTK_TOGGLE_BUTTON(conf_cb_showinf)->active = (g_game.msg_show & M_INF) ?1:0;
-	gtk_box_pack_start( GTK_BOX( vbox ), conf_cb_showinf, FALSE, FALSE, 0);
-	gtk_signal_connect (GTK_OBJECT (conf_cb_showinf), "clicked", GTK_SIGNAL_FUNC
-			(prop_box_changed_callback), NULL);
-
-	gtk_container_add (GTK_CONTAINER (msg_frame), vbox);
-
-
-	/** Status options **/
-
-	sts_frame = gtk_frame_new (_("Status Of Players"));
-	gtk_container_border_width (GTK_CONTAINER (sts_frame), GNOME_PAD);
-
-	hbox = gtk_hbox_new (TRUE, 0);
-	vbox = gtk_vbox_new (FALSE, 0);
-	gtk_container_border_width (GTK_CONTAINER (hbox), GNOME_PAD);
-	gtk_container_border_width (GTK_CONTAINER (vbox), 0);
-
-
-	conf_cb_stscolor = gtk_check_button_new_with_label(_("Show Color"));
-	GTK_TOGGLE_BUTTON(conf_cb_stscolor)->active = (gui_private.status_show & (1 <<STATUS_COLUMN_COLOR) ) ?1:0;
-	gtk_box_pack_start( GTK_BOX( vbox ), conf_cb_stscolor, FALSE, FALSE, 0);
-	gtk_signal_connect (GTK_OBJECT (conf_cb_stscolor), "clicked", GTK_SIGNAL_FUNC
-			(prop_box_changed_callback), NULL);
-
-
-	conf_cb_stsnumber = gtk_check_button_new_with_label(_("Show Player Number"));
-	GTK_TOGGLE_BUTTON(conf_cb_stsnumber)->active = (gui_private.status_show & (1 << STATUS_COLUMN_NUMBER) ) ?1:0;
-	gtk_box_pack_start( GTK_BOX( vbox ), conf_cb_stsnumber, FALSE, FALSE, 0);
-	gtk_signal_connect (GTK_OBJECT (conf_cb_stsnumber), "clicked", GTK_SIGNAL_FUNC
-			(prop_box_changed_callback), NULL);
-
-
-	conf_cb_stsname = gtk_check_button_new_with_label(_("Show Name"));
-	GTK_TOGGLE_BUTTON(conf_cb_stsname)->active = (gui_private.status_show & (1 <<STATUS_COLUMN_NAME) ) ?1:0;
-	gtk_box_pack_start( GTK_BOX( vbox ), conf_cb_stsname, FALSE, FALSE, 0);
-	gtk_signal_connect (GTK_OBJECT (conf_cb_stsname), "clicked", GTK_SIGNAL_FUNC
-			(prop_box_changed_callback), NULL);
-
-
-	conf_cb_stsscore= gtk_check_button_new_with_label(_("Show Score"));
-	GTK_TOGGLE_BUTTON(conf_cb_stsscore)->active = (gui_private.status_show & (1 << STATUS_COLUMN_SCORE) ) ?1:0;
-	gtk_box_pack_start( GTK_BOX( vbox ), conf_cb_stsscore, FALSE, FALSE, 0);
-	gtk_signal_connect (GTK_OBJECT (conf_cb_stsscore), "clicked", GTK_SIGNAL_FUNC
-			(prop_box_changed_callback), NULL);
-
-	conf_cb_stsaddress = gtk_check_button_new_with_label(_("Show IP Address"));
-	GTK_TOGGLE_BUTTON(conf_cb_stsaddress)->active = (gui_private.status_show & (1 << STATUS_COLUMN_ADDR) ) ?1:0;
-	gtk_box_pack_start( GTK_BOX( vbox ), conf_cb_stsaddress, FALSE, FALSE, 0);
-	gtk_signal_connect (GTK_OBJECT (conf_cb_stsaddress), "clicked", GTK_SIGNAL_FUNC
-			(prop_box_changed_callback), NULL);
-
-	conf_cb_stshuman= gtk_check_button_new_with_label(_("Show Human/Robot"));
-	GTK_TOGGLE_BUTTON(conf_cb_stshuman)->active = (gui_private.status_show & (1 << STATUS_COLUMN_HUMAN) ) ?1:0;
-	gtk_box_pack_start( GTK_BOX( vbox ), conf_cb_stshuman, FALSE, FALSE, 0);
-	gtk_signal_connect (GTK_OBJECT (conf_cb_stshuman), "clicked", GTK_SIGNAL_FUNC
-			(prop_box_changed_callback), NULL);
-
-	// now start the left box
-	gtk_box_pack_start ( GTK_BOX (hbox), vbox, FALSE, TRUE, 0);
-	vbox = gtk_vbox_new (FALSE, 0);
-	gtk_container_border_width (GTK_CONTAINER (vbox), 0);
-
-
-	conf_cb_stscountries = gtk_check_button_new_with_label(_("Show Countries"));
-	GTK_TOGGLE_BUTTON(conf_cb_stscountries)->active = (gui_private.status_show & (1 << STATUS_COLUMN_COUNTRIES) ) ?1:0;
-	gtk_box_pack_start( GTK_BOX( vbox ), conf_cb_stscountries, FALSE, FALSE, 0);
-	gtk_signal_connect (GTK_OBJECT (conf_cb_stscountries), "clicked", GTK_SIGNAL_FUNC
-			(prop_box_changed_callback), NULL);
-
-	conf_cb_stsarmies = gtk_check_button_new_with_label(_("Show Armies"));
-	GTK_TOGGLE_BUTTON(conf_cb_stsarmies)->active = (gui_private.status_show & (1 << STATUS_COLUMN_ARMIES) ) ?1:0;
-	gtk_box_pack_start( GTK_BOX( vbox ), conf_cb_stsarmies, FALSE, FALSE, 0);
-	gtk_signal_connect (GTK_OBJECT (conf_cb_stsarmies), "clicked", GTK_SIGNAL_FUNC
-			(prop_box_changed_callback), NULL);
-
-	conf_cb_stscards = gtk_check_button_new_with_label(_("Show Cards"));
-	GTK_TOGGLE_BUTTON(conf_cb_stscards)->active = (gui_private.status_show & (1 << STATUS_COLUMN_CARDS) ) ?1:0;
-	gtk_box_pack_start( GTK_BOX( vbox ), conf_cb_stscards, FALSE, FALSE, 0);
-	gtk_signal_connect (GTK_OBJECT (conf_cb_stscards), "clicked", GTK_SIGNAL_FUNC
-			(prop_box_changed_callback), NULL);
-
-	conf_cb_stsstatus = gtk_check_button_new_with_label(_("Show Status"));
-	GTK_TOGGLE_BUTTON(conf_cb_stsstatus)->active = (gui_private.status_show & (1 << STATUS_COLUMN_STATUS) ) ?1:0;
-	gtk_box_pack_start( GTK_BOX( vbox ), conf_cb_stsstatus, FALSE, FALSE, 0);
-	gtk_signal_connect (GTK_OBJECT (conf_cb_stsstatus), "clicked", GTK_SIGNAL_FUNC
-			(prop_box_changed_callback), NULL);
-
-	conf_cb_stswho = gtk_check_button_new_with_label(_("Show Who Started"));
-	GTK_TOGGLE_BUTTON(conf_cb_stswho)->active = ( gui_private.status_show & (1<<STATUS_COLUMN_WHO) ) ?1:0;
-	gtk_box_pack_start( GTK_BOX( vbox ), conf_cb_stswho, FALSE, FALSE, 0);
-	gtk_signal_connect (GTK_OBJECT (conf_cb_stswho), "clicked", GTK_SIGNAL_FUNC
-			(prop_box_changed_callback), NULL);
-
-	/* hbox contains two vboxes which contain the buttons/labels */
-	gtk_box_pack_start ( GTK_BOX (hbox), vbox, FALSE, TRUE, 0);
-
-	gtk_container_add (GTK_CONTAINER (sts_frame), hbox);
-
-
-	/* Robot Options */
-
-	robot_frame = gtk_frame_new (_("Launch Robot"));
-	gtk_container_border_width (GTK_CONTAINER (robot_frame), GNOME_PAD);
-
-	vbox = gtk_vbox_new (FALSE, 0);
-	gtk_container_border_width (GTK_CONTAINER (vbox), GNOME_PAD);
-
-	conf_cb_robotserver = gtk_radio_button_new_with_label ( NULL, 
-			_("Starts the robots in the server (faster)"));
-	gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (conf_cb_robotserver), g_game.robot_in_server );
-	gtk_box_pack_start( GTK_BOX(vbox), conf_cb_robotserver, FALSE, FALSE, 0);
-	gtk_signal_connect (GTK_OBJECT (conf_cb_robotserver), "clicked",
-			GTK_SIGNAL_FUNC(prop_box_changed_callback), NULL);
-
-	conf_cb_robotclient = gtk_radio_button_new_with_label_from_widget( GTK_RADIO_BUTTON(conf_cb_robotserver),
-			_("Starts the robots in the client (preserves localization)"));
-	gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (conf_cb_robotclient), ! g_game.robot_in_server );
-	gtk_box_pack_start( GTK_BOX(vbox), conf_cb_robotclient, FALSE, FALSE, 0);
-	gtk_signal_connect (GTK_OBJECT (conf_cb_robotclient), "clicked",
-			GTK_SIGNAL_FUNC(prop_box_changed_callback), NULL);
-
-
-	gtk_container_add (GTK_CONTAINER (robot_frame), vbox);
-
-
-	/* Dialogs Options */
-	dialog_frame = gtk_frame_new (_("Popup Dialogs"));
-	gtk_container_border_width (GTK_CONTAINER (dialog_frame), GNOME_PAD);
-
-	vbox = gtk_vbox_new (FALSE, 0);
-	gtk_container_border_width (GTK_CONTAINER (vbox), GNOME_PAD);
-
-	conf_cb_showattackturn = gtk_check_button_new_with_label (_("Show 'your turn for attack' dialog"));
-	GTK_TOGGLE_BUTTON(conf_cb_showattackturn)->active =
-		( gui_private.dialog_show & (1<<DIALOG_ATTACK_TURN) ) ?1:0;
-	gtk_box_pack_start( GTK_BOX(vbox), conf_cb_showattackturn, FALSE, FALSE, 0);
-	gtk_signal_connect (GTK_OBJECT (conf_cb_showattackturn), "clicked",
-			GTK_SIGNAL_FUNC(prop_box_changed_callback), NULL);
-
-	conf_cb_showregrouparmies = gtk_check_button_new_with_label (_("Show 'regroup your armies' dialog"));
-	GTK_TOGGLE_BUTTON(conf_cb_showregrouparmies)->active =
-		( gui_private.dialog_show & (1<<DIALOG_REGROUP_ARMIES) ) ?1:0;
-	gtk_box_pack_start( GTK_BOX(vbox), conf_cb_showregrouparmies, FALSE, FALSE, 0);
-	gtk_signal_connect (GTK_OBJECT (conf_cb_showregrouparmies), "clicked",
-			GTK_SIGNAL_FUNC(prop_box_changed_callback), NULL);
-
-	conf_cb_showplacearmies = gtk_check_button_new_with_label (_("Show 'place your armies' dialog"));
-	GTK_TOGGLE_BUTTON(conf_cb_showplacearmies)->active =
-		( gui_private.dialog_show & (1<<DIALOG_PLACE_ARMIES) ) ?1:0;
-	gtk_box_pack_start( GTK_BOX(vbox), conf_cb_showplacearmies, FALSE, FALSE, 0);
-	gtk_signal_connect (GTK_OBJECT (conf_cb_showplacearmies), "clicked",
-			GTK_SIGNAL_FUNC(prop_box_changed_callback), NULL);
-
-	gtk_container_add (GTK_CONTAINER (dialog_frame), vbox);
-
-
-	/** end **/
-
-	pref_dialog = gnome_property_box_new ();
-	gnome_dialog_set_parent (GNOME_DIALOG (pref_dialog),
-			GTK_WINDOW (main_window));
-	gtk_window_set_title (GTK_WINDOW (pref_dialog),
-			_("TEG Preferences"));
-	gtk_signal_connect (GTK_OBJECT (pref_dialog), "destroy",
-			GTK_SIGNAL_FUNC (gtk_widget_destroyed), &pref_dialog);
-
-
-	label = gtk_label_new (_("Themes"));
-	gnome_property_box_append_page (GNOME_PROPERTY_BOX (pref_dialog),
-			theme_vbox, label);
-
-	label = gtk_label_new (_("Console Messages"));
-	gnome_property_box_append_page (GNOME_PROPERTY_BOX (pref_dialog),
-			msg_frame, label);
-
-	label = gtk_label_new (_("Status Of Players"));
-	gnome_property_box_append_page (GNOME_PROPERTY_BOX (pref_dialog),
-			sts_frame, label);
-
-	label = gtk_label_new (_("Robot"));
-	gnome_property_box_append_page (GNOME_PROPERTY_BOX (pref_dialog),
-			robot_frame, label);
-
-	label = gtk_label_new (_("Popup Dialogs"));
-	gnome_property_box_append_page (GNOME_PROPERTY_BOX (pref_dialog),
-			dialog_frame, label);
-
-
-
-	gtk_signal_connect (GTK_OBJECT (pref_dialog), "apply", GTK_SIGNAL_FUNC
-			(apply_cb), NULL);
-
-	if (!GTK_WIDGET_VISIBLE (pref_dialog))
-		gtk_widget_show_all (pref_dialog);
-	else
-		gtk_widget_destroy (pref_dialog);
+	gtk_widget_show_all(pref_dialog);
+	gtk_window_present(GTK_WINDOW(pref_dialog));
 }

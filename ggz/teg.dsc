@@ -6,7 +6,7 @@ Name = TEG
 Version = 0.11.2
 
 [LaunchInfo]
-ExecutablePath = /home/mquesada/teg3/bin/tegserver --ggz
+ExecutablePath = /usr/local/bin/tegserver --ggz
 
 [Protocol]
 Engine = TEG

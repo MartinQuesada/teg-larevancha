@@ -36,7 +36,8 @@
 
 
 void stock_init (void);
+GdkPixbuf* stock_get_pixbuf(const gchar *stock_id);
+GtkWidget* stock_create_image(const gchar *stock_id);
 
-
 
 #endif

@@ -24,10 +24,11 @@
 #ifndef __GUI_GNOME_ARMIES_H
 #define __GUI_GNOME_ARMIES_H
 
+// GTK4: Cambiamos GnomeCanvasItem por GtkWidget
 typedef struct _armies_pos {
 	int cant;
 	int orig_cant;
-	GnomeCanvasItem *armies_text;
+	GtkWidget *armies_text;
 } ARMIES_POS, *PARMIES_POS;
 
 TEG_STATUS armies_add(int country);
@@ -35,6 +36,7 @@ TEG_STATUS armies_del(int country);
 TEG_STATUS armies_view(int cant, int conts);
 TEG_STATUS armies_view_more( int cant );
 TEG_STATUS armies_unview();
-TEG_STATUS armies_init();
+// GTK4: Cambiamos el parámetro de GnomeCanvasGroup a GtkWidget
+TEG_STATUS armies_init(GtkWidget *group);
 
 #endif /* __GUI_GNOME_ARMIES_H */

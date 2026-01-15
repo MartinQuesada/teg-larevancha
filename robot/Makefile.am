@@ -5,7 +5,7 @@ bin_PROGRAMS = tegrobot
 INCLUDES = 	\
 	@CLIENT_CFLAGS@	\
 	@XML_CFLAGS@ \
-	-I$(top_srcdir)/common -I$(top_srcdir)/client -I$(top_srcdir)/server -I../intl 
+	-I$(top_srcdir)/common -I$(top_srcdir)/client -I$(top_srcdir)/server -I$(top_srcdir)/intl 
 
 tegrobot_SOURCES = 		\
 	main.c main.h		\

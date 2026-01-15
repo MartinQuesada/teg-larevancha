@@ -19,7 +19,7 @@
  */
 
 #include <config.h>
-#include <gnome.h>
+#include "gnome-compat.h"
 #include "stock.h"
 
 
@@ -27,57 +27,60 @@
 #include "stock/stock-sendarmies.xpm"
 #include "stock/stock-endturn.xpm"
 #include "stock/stock-viewplayers.xpm"
+#include "stock/stock-zoom-1.xpm"
+#include "stock/stock-zoom-fit.xpm"
+#include "stock/stock-zoom-in.xpm"
+#include "stock/stock-zoom-out.xpm"
 
+/* Hash table to store stock pixbufs */
+static GHashTable *stock_pixbufs = NULL;
 
-/* from libgnomeui2/gnome-stock-icons.c */
-static void add_sized (GtkIconFactory *factory,
-           const char   **xpm_data,
-           GtkIconSize     size,
-           const gchar    *stock_id)
+static void add_stock_icon(const char **xpm_data, const gchar *stock_id)
 {
-	GtkIconSet *set;
-	GtkIconSource *source;
 	GdkPixbuf *pixbuf;
-
+	
 	pixbuf = gdk_pixbuf_new_from_xpm_data(xpm_data);
-
-	source = gtk_icon_source_new ();
-	gtk_icon_source_set_pixbuf (source, pixbuf);
-	gtk_icon_source_set_size (source, size);
-
-	set = gtk_icon_set_new ();                
-	gtk_icon_set_add_source (set, source);
-
-	gtk_icon_factory_add (factory, stock_id, set);
-
-	g_object_unref (G_OBJECT (pixbuf));
-	gtk_icon_source_free (source);
-	gtk_icon_set_unref (set);
+	if (pixbuf) {
+		g_hash_table_insert(stock_pixbufs, g_strdup(stock_id), pixbuf);
+	}
 }
 
 void stock_init (void)
 {
 	static gboolean initialized = FALSE;
-	GtkIconFactory *factory;
-
-	static GtkStockItem entries[] ={
-		{ STOCK_GETCARD, N_("Get Card"), 0, 0, GETTEXT_PACKAGE },
-		{ STOCK_SENDARMIES, N_("Send Armies"), 0, 0, GETTEXT_PACKAGE },
-		{ STOCK_ENDTURN, N_("End Turn"), 0, 0, GETTEXT_PACKAGE },
-		{ STOCK_VIEWPLAYERS, N_("View Players"), 0, 0, GETTEXT_PACKAGE }
-	};
 
 	if (initialized)
 		return;
 	else
 		initialized = TRUE;
 
-    	factory = gtk_icon_factory_new ();
-	add_sized (factory, stock_getcard_xpm, GTK_ICON_SIZE_BUTTON, STOCK_GETCARD);
-	add_sized (factory, stock_sendarmies_xpm, GTK_ICON_SIZE_BUTTON, STOCK_SENDARMIES);
-	add_sized (factory, stock_endturn_xpm, GTK_ICON_SIZE_BUTTON, STOCK_ENDTURN);
-	add_sized (factory, stock_viewplayers_xpm, GTK_ICON_SIZE_BUTTON, STOCK_VIEWPLAYERS);
+	/* Create hash table to store pixbufs */
+	stock_pixbufs = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_object_unref);
 
-	gtk_icon_factory_add_default (factory);
-	gtk_stock_add_static( entries, G_N_ELEMENTS(entries) );
+	/* Add all stock icons */
+	add_stock_icon(stock_getcard_xpm, STOCK_GETCARD);
+	add_stock_icon(stock_sendarmies_xpm, STOCK_SENDARMIES);
+	add_stock_icon(stock_endturn_xpm, STOCK_ENDTURN);
+	add_stock_icon(stock_viewplayers_xpm, STOCK_VIEWPLAYERS);
+	add_stock_icon(stock_zoom_1_xpm, STOCK_ZOOM_1);
+	add_stock_icon(stock_zoom_fit_xpm, STOCK_ZOOM_FIT);
+	add_stock_icon(stock_zoom_in_xpm, STOCK_ZOOM_IN);
+	add_stock_icon(stock_zoom_out_xpm, STOCK_ZOOM_OUT);
+}
+
+GdkPixbuf* stock_get_pixbuf(const gchar *stock_id)
+{
+	if (!stock_pixbufs) {
+		stock_init();
+	}
+	return (GdkPixbuf*)g_hash_table_lookup(stock_pixbufs, stock_id);
+}
+
+GtkWidget* stock_create_image(const gchar *stock_id)
+{
+	GdkPixbuf *pixbuf = stock_get_pixbuf(stock_id);
+	if (pixbuf) {
+		return gtk_image_new_from_pixbuf(pixbuf);
+	}
+	return NULL;
 }

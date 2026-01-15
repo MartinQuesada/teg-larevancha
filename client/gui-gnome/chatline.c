@@ -15,7 +15,7 @@
 #include <config.h>
 #endif
 
-#include <gnome.h>
+#include "gnome-compat.h"
 
 #include <stdio.h>
 #include <stdlib.h>

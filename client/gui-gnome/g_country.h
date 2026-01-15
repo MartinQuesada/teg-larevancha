@@ -19,35 +19,45 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.
  */
 /**
- * \file g_country.h
+ * @file g_country.h
+ * Sistema de países del mapa - Migrado a GTK3/Cairo
  */
 #ifndef __TEG_GUI_GNOME_GCOUNTRY_H
 #define __TEG_GUI_GNOME_GCOUNTRY_H
 
-#include <gnome.h>
+#include <gtk/gtk.h>
+#include "country.h"  /* Para COUNTRIES_CANT y PCOUNTRY */
 
+/**
+ * Estructura de datos gráficos de un país
+ * En GTK3/Cairo usamos GdkPixbuf en lugar de GnomeCanvasItem
+ */
 struct _G_countries {
-	char *gfx_name;			/**< name del archivo grafico del country */
-	gint x;				/**< x relativo al continente */
-	gint y;				/**< idem anterior */
-	gint x_len;			/**< valores updateados en real time. Dont fill	*/
-	gint y_len;			/**<		"" 				*/
-	gint x_center;			/**< si las fichas no estan centradas usar esto	*/
-	gint y_center;			/**<              ""				*/
-	GnomeCanvasGroup *country_group;	/**< contenedor del country */
-	GnomeCanvasItem *country_item;	/**< the figure of the map (png) */
-	GnomeCanvasItem *ellip_item;	/**< circle of armies of the country */
-	GnomeCanvasItem *text_item;	/**< the number of armies of the country */
-}; 
+	char *gfx_name;        /**< Nombre del archivo gráfico del país */
+	gint x;                /**< X relativo al continente */
+	gint y;                /**< Y relativo al continente */
+	gint x_len;            /**< Ancho de la imagen */
+	gint y_len;            /**< Alto de la imagen */
+	gint x_center;         /**< Offset X para centrar ejércitos */
+	gint y_center;         /**< Offset Y para centrar ejércitos */
+	GdkPixbuf *pixbuf;     /**< Imagen del país */
+};
 
 extern struct _G_countries G_countries[];
 
-void G_country_create( int country );
-void G_country_draw( int country );
-void G_country_draw_ejer(int country) ;
-int G_country_tot();
+/* Funciones de inicialización y carga */
+void G_country_init(void);
+void G_country_create(int country);
+void G_country_draw(int country);
+void G_country_draw_ejer(int country);
 
-/* gui */
+/* Funciones del widget del mapa */
+GtkWidget* G_country_create_map_widget(void);
+GtkWidget* G_country_get_map_widget(void);
+void G_country_redraw(void);
+
+/* Funciones GUI */
 TEG_STATUS gui_country_select(int country);
+TEG_STATUS g_country_init(void);
 
 #endif /* __TEG_GUI_GNOME_GCOUNTRY_H */

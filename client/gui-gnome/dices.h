@@ -24,8 +24,18 @@
 #ifndef __TEG_GUI_GNOME_DICES_H
 #define __TEG_GUI_GNOME_DICES_H
 
-void dices_view();
-void dices_unview();
-void dices_init( GnomeCanvasGroup *root);
+void dices_view(void);
+void dices_unview(void);
+void dices_init(GtkWidget *parent);
+
+/* Nuevas funciones GTK3 */
+GtkWidget *dices_get_widget(void);
+void dices_get_offset(double *x, double *y);
+
+/* Función para dibujar dados en un cairo_t (para integrar en el mapa) */
+void dices_draw_on_cairo(cairo_t *cr);
+
+/* Función para cargar las imágenes de dados (llamar antes de usarlos) */
+void dices_load_images(void);
 
 #endif 

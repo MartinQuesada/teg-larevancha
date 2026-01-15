@@ -25,7 +25,7 @@
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
-#include <gnome.h>
+#include <gtk/gtk.h>
 
 #include "gui.h"
 #include "client.h"
@@ -158,14 +158,17 @@ TEG_STATUS gui_init( int argc, char **argv)
 	textdomain(PACKAGE);
 #endif
 
-	gnome_program_init (PACKAGE, VERSION,
-			LIBGNOMEUI_MODULE,
-			argc, argv,
-			GNOME_PARAM_POPT_TABLE, options,
-			GNOME_PARAM_APP_DATADIR, DATADIR, NULL);
+	gtk_init(&argc, &argv);
 
-	/* Get the default GConfClient */
-	g_conf_client = gconf_client_get_default ();
+	/* Get the default GSettings */
+	/* Temporarily disabled GSettings due to schema installation issues */
+	/*
+	g_settings = g_settings_new("org.gnome.teg");
+	if (!g_settings) {
+		fprintf(stderr, "Warning: Could not load GSettings schema 'org.gnome.teg'. Using defaults.\n");
+	}
+	*/
+	g_settings = NULL;
 
 	stock_init();
 
@@ -189,7 +192,13 @@ TEG_STATUS gui_init( int argc, char **argv)
 
 	priv_init();
 
+	/* Cargar los gráficos de los países */
+	create_canvas_items();
+
 	locate_country_init();
+
+	/* Mostrar la ventana principal */
+	gtk_widget_show_all(main_window);
 
 	return TEG_STATUS_SUCCESS;
 }
@@ -253,51 +262,65 @@ static TEG_STATUS get_default_values( void )
 {
 	gchar *string;
 
-	string = gconf_client_get_string( g_conf_client, "/apps/teg/playername",NULL);
-	if( string && string[0] )
-		strncpy(g_game.myname,string,PLAYERNAME_MAX_LEN);
-	else
-		strncpy(g_game.myname,getenv("LOGNAME"),PLAYERNAME_MAX_LEN);
+	if (g_settings) {
+		string = g_settings_get_string(g_settings, "playername");
+		if( string && string[0] )
+			strncpy(g_game.myname,string,PLAYERNAME_MAX_LEN);
+		else
+			strncpy(g_game.myname,getenv("LOGNAME"),PLAYERNAME_MAX_LEN);
 
+		g_game.mycolor = g_settings_get_int(g_settings, "color");
 
-	g_game.mycolor = gconf_client_get_int( g_conf_client, "/apps/teg/color", NULL);
+		string = g_settings_get_string(g_settings, "servername");
+		if( string )
+			strncpy(g_game.sername,string,SERVER_NAMELEN);
+		else
+			strncpy(g_game.sername,"localhost",SERVER_NAMELEN);
 
-	string = gconf_client_get_string( g_conf_client, "/apps/teg/servername",NULL);
-	if( string )
-		strncpy(g_game.sername,string,SERVER_NAMELEN);
-	else
-		strncpy(g_game.sername,"localhost",SERVER_NAMELEN);
-
-	g_game.msg_show = gconf_client_get_int( g_conf_client, "/apps/teg/msgshow",NULL);
-	gui_private.msg_show_colors =  gconf_client_get_bool( g_conf_client, "/apps/teg/msgshow_with_color",NULL);
-	gui_private.dialog_show =  gconf_client_get_int( g_conf_client, "/apps/teg/dialog_show",NULL);
-	string = gconf_client_get_string( g_conf_client, "/apps/teg/theme",NULL);
-	if( string )
-		strncpy( g_game.theme, string ,sizeof(g_game.theme) );
-	else
-		strncpy( g_game.theme, "m2" ,sizeof(g_game.theme) );
-	g_game.robot_in_server = gconf_client_get_bool( g_conf_client, "/apps/teg/robot_in_server",NULL);
-	
-	gui_private.status_show =  gconf_client_get_int( g_conf_client, "/apps/teg/status_show",NULL);
-	g_game.serport = gconf_client_get_int( g_conf_client, "/apps/teg/port",NULL);
-	// if serport is still 0 then this must be the first start of this program, so set serport and
-	// status_show to reasonable default values
-	if ( g_game.serport == 0 )
-	{
-		g_game.serport = 2000;
+		g_game.msg_show = g_settings_get_int(g_settings, "msgshow");
+		gui_private.msg_show_colors = g_settings_get_boolean(g_settings, "msgshow-with-color");
+		gui_private.dialog_show = g_settings_get_int(g_settings, "dialog-show");
+		string = g_settings_get_string(g_settings, "theme");
+		if( string )
+			strncpy( g_game.theme, string ,sizeof(g_game.theme) );
+		else
+			strncpy( g_game.theme, "sentimental" ,sizeof(g_game.theme) );
+		g_game.robot_in_server = g_settings_get_boolean(g_settings, "robot-in-server");
+		
+		gui_private.status_show = g_settings_get_int(g_settings, "status-show");
+		g_game.serport = g_settings_get_int(g_settings, "port");
+		// if serport is still 0 then this must be the first start of this program, so set serport and
+		// status_show to reasonable default values
+		if ( g_game.serport == 0 )
+		{
+			g_game.serport = 2000;
+			gui_private.status_show = 453;
+		}
+		
+		g_settings_set_int(g_settings, "port", g_game.serport);
+		g_settings_set_string(g_settings, "servername", g_game.sername);
+		g_settings_set_string(g_settings, "playername", g_game.myname);
+		g_settings_set_string(g_settings, "theme", g_game.theme);
+		g_settings_set_int(g_settings, "color", g_game.mycolor);
+		g_settings_set_int(g_settings, "msgshow", g_game.msg_show);
+		g_settings_set_boolean(g_settings, "msgshow-with-color", gui_private.msg_show_colors);
+		g_settings_set_int(g_settings, "status-show", gui_private.status_show);
+		g_settings_set_int(g_settings, "dialog-show", gui_private.dialog_show);
+		g_settings_set_boolean(g_settings, "robot-in-server", g_game.robot_in_server);
+	} else {
+		// Use default values when GSettings is not available
+		strncpy(g_game.myname, getenv("LOGNAME") ? getenv("LOGNAME") : "player", PLAYERNAME_MAX_LEN);
+		g_game.mycolor = 0;
+		strncpy(g_game.sername, "localhost", SERVER_NAMELEN);
+		g_game.msg_show = 1;
+		gui_private.msg_show_colors = TRUE;
+		gui_private.dialog_show = 1;
+		strncpy(g_game.theme, "sentimental", sizeof(g_game.theme));
+		g_game.robot_in_server = FALSE;
 		gui_private.status_show = 453;
+		g_game.serport = 2000;
 	}
 	
-	gconf_client_set_int   ( g_conf_client, "/apps/teg/port",  g_game.serport, NULL);
-	gconf_client_set_string( g_conf_client, "/apps/teg/servername",g_game.sername, NULL);
-	gconf_client_set_string( g_conf_client, "/apps/teg/playername",g_game.myname, NULL);
-	gconf_client_set_string( g_conf_client, "/apps/teg/theme",g_game.theme, NULL);
-	gconf_client_set_int( g_conf_client, "/apps/teg/color",g_game.mycolor, NULL);
-	gconf_client_set_int( g_conf_client, "/apps/teg/msgshow",g_game.msg_show, NULL);
-	gconf_client_set_bool( g_conf_client, "/apps/teg/msgshow_with_color",gui_private.msg_show_colors, NULL);
-	gconf_client_set_int( g_conf_client, "/apps/teg/status_show",gui_private.status_show, NULL);
-	gconf_client_set_int( g_conf_client, "/apps/teg/dialog_show",gui_private.dialog_show, NULL);
-	gconf_client_set_bool( g_conf_client, "/apps/teg/robot_in_server",g_game.robot_in_server, NULL);
 	return TEG_STATUS_SUCCESS;
 }
 
@@ -450,7 +473,7 @@ TEG_STATUS gui_tarjeta( int country )
 	cards_view( country );
 
 	if( tarjeta_es_usada( &g_countries[country].tarjeta ) )
-		locate_country_add_army( &g_countries[country] );
+		locate_country_add_army( country );
 
 	set_sensitive_tb();
 	return TEG_STATUS_SUCCESS;

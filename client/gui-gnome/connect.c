@@ -18,19 +18,18 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.
  */
-/*
- * connection dialogs, color dialogs, and game type
- *
- * some metaserver code and ideas were taken from freeciv-gtk-2.0 client
+/**
+ * @file connect.c
+ * Connection dialogs, color dialogs, and game type - Migrado a GTK3
  */
 #ifdef HAVE_CONFIG_H
 #  include <config.h>
 #endif
 
 #include <assert.h>
-#include <gnome.h>
-#include <gconf/gconf-client.h>
+#include <gtk/gtk.h>
 
+#include "gnome-compat.h"
 #include "gui.h"
 #include "client.h"
 #include "support.h"
@@ -39,35 +38,35 @@
 #include "connect.h"
 #include "priv.h"
 #include "colors.h"
-#include "ggz_client.h"
+#include "outputfd.h"
 
+/* Declaración correcta de out_color (el header tiene bug) */
+TEG_STATUS out_color(int color);
+
+/* Widgets del diálogo de conexión */
 static GtkWidget *connect_window = NULL;
-static GtkWidget *con_entry_name=NULL;
-static GtkWidget *con_spinner_port=NULL;
-static GtkWidget *con_entry_server=NULL;
+static GtkWidget *con_entry_name = NULL;
+static GtkWidget *con_spinner_port = NULL;
+static GtkWidget *con_entry_server = NULL;
+static GtkWidget *button_launch = NULL;
+static GtkWidget *button_observe = NULL;
 
-static GtkWidget *button_launch=NULL;
+/* Widgets del diálogo de selección de color */
+static GtkWidget *colortype_dialog = NULL;
+static GtkWidget *boton_color[TEG_MAX_PLAYERS] = { NULL };
 
-static GtkWidget *button_observe=NULL;
+/* Widgets del diálogo de tipo de juego */
+static GtkWidget *gametype_dialog = NULL;
+static GtkWidget *gametype_button_conqworld = NULL;
+static GtkWidget *gametype_button_secret = NULL;
+static GtkWidget *gametype_button_viewall = NULL;
+static GtkWidget *gametype_button_fow = NULL;
+static GtkWidget *gametype_button_commonmission = NULL;
+static GtkWidget *gametype_spinner_armies1 = NULL;
+static GtkWidget *gametype_spinner_armies2 = NULL;
 
-static GtkWidget *colortype_dialog=NULL;
-
-static GtkWidget *gametype_dialog=NULL;
-static GtkWidget *gametype_button_conqworld=NULL;
-static GtkWidget *gametype_button_secret=NULL;
-static GtkWidget *gametype_button_viewall=NULL;
-static GtkWidget *gametype_button_fow=NULL;
-static GtkWidget *gametype_button_commonmission=NULL;
-static GtkWidget *gametype_spinner_armies1=NULL;
-static GtkWidget *gametype_spinner_armies2=NULL;
-
-
-static GtkWidget *boton_color[TEG_MAX_PLAYERS] = { NULL, NULL, NULL, NULL, NULL, NULL };
-
-/* metaserver */
-static GtkListStore *metaserver_store;
-static void meta_list_callback(GtkTreeSelection *select, GtkTreeModel *model);
-static void meta_update_callback(GtkWidget *w, gpointer data);
+/* Metaserver */
+static GtkListStore *metaserver_store = NULL;
 
 enum {
 	METASERVER_NAME,
@@ -77,518 +76,423 @@ enum {
 };
 
 
-
-static TEG_STATUS connect_real()
+/**
+ * Realiza la conexión real al servidor
+ */
+static TEG_STATUS connect_real(void)
 {
-	if( teg_connect() == TEG_STATUS_SUCCESS ) {
-		gui_private.tag = gdk_input_add( g_game.fd, GDK_INPUT_READ, (GdkInputFunction) pre_client_recv, (gpointer) NULL );
+	if (teg_connect() == TEG_STATUS_SUCCESS) {
+		/* En GTK3 usamos GIOChannel en lugar de gdk_input_add */
+		GIOChannel *channel = g_io_channel_unix_new(g_game.fd);
+		g_io_channel_set_encoding(channel, NULL, NULL);  /* Binary mode */
+		g_io_channel_set_buffered(channel, FALSE);
+		
+		gui_private.tag = g_io_add_watch(channel, 
+		                                  G_IO_IN | G_IO_ERR | G_IO_HUP,
+		                                  pre_client_recv_gio, NULL);
+		g_io_channel_unref(channel);
 
-		if( !g_game.with_ggz ) {
+		if (!g_game.with_ggz) {
 			out_id();
-			if( connect_window ) destroy_window( connect_window, &connect_window );
+			if (connect_window) {
+				gtk_widget_destroy(connect_window);
+				connect_window = NULL;
+			}
 		}
-#ifdef WITH_GGZ
-		else {
-			gui_private.tag_ggz = gdk_input_add( ggz_client_get_fd(), GDK_INPUT_READ, (GdkInputFunction) ggz_client_handle, (gpointer) NULL );
-		}
-#endif /* WITH_GGZ */
+
 		countries_redraw_all();
 		return TEG_STATUS_SUCCESS;
 	}
 	return TEG_STATUS_ERROR;
 }
 
-static gint connect_button_con_cb(GtkWidget *area, GdkEventExpose *event, gpointer user_data)
+
+/**
+ * Callback del botón conectar
+ */
+static void connect_button_clicked(GtkWidget *button, gpointer user_data)
 {
-	strncpy(g_game.myname,gtk_entry_get_text(GTK_ENTRY(con_entry_name)),PLAYERNAME_MAX_LEN);
-	strncpy(g_game.sername,gtk_entry_get_text(GTK_ENTRY(con_entry_server)),SERVER_NAMELEN);
+	const char *name, *server;
+	
+	name = gtk_entry_get_text(GTK_ENTRY(con_entry_name));
+	server = gtk_entry_get_text(GTK_ENTRY(con_entry_server));
+	
+	strncpy(g_game.myname, name, PLAYERNAME_MAX_LEN);
+	strncpy(g_game.sername, server, SERVER_NAMELEN);
 	g_game.serport = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(con_spinner_port));
 
-	g_game.observer = GTK_TOGGLE_BUTTON(button_observe)->active;
+	g_game.observer = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(button_observe));
 
-	/* if you checked "start local server" we'll copy "localhost" to g_game.sername */
-	if( gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(button_launch) ) ) {
+	/* Si se marcó "iniciar servidor local" */
+	if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(button_launch))) {
 		launch_server(g_game.serport);
 	}
 
-	gconf_client_set_int(g_conf_client, "/apps/teg/port", g_game.serport, NULL);
-	gconf_client_set_string(g_conf_client, "/apps/teg/servername", g_game.sername, NULL);
-	gconf_client_set_string(g_conf_client, "/apps/teg/playername", g_game.myname, NULL);
+	/* Guardar en GSettings si está disponible */
+	if (g_settings) {
+		g_settings_set_int(g_settings, "port", g_game.serport);
+		g_settings_set_string(g_settings, "servername", g_game.sername);
+		g_settings_set_string(g_settings, "playername", g_game.myname);
+	}
 
 	connect_real();
-
-	return FALSE;
 }
 
-/*
- * Called when something has changed on the properybox
+
+/**
+ * Callback cuando se marca "iniciar servidor local"
  */
-static void
-prop_changed (GtkWidget *w, void *n)
+static void launch_toggled(GtkToggleButton *button, gpointer user_data)
 {
-	if( gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(button_launch) ) )
-		gtk_entry_set_text( GTK_ENTRY( con_entry_server ), "localhost");
+	if (gtk_toggle_button_get_active(button)) {
+		gtk_entry_set_text(GTK_ENTRY(con_entry_server), "localhost");
+	}
 }
 
-static void button_secret_enabled( GtkWidget *w, void *n )
+
+/**
+ * Callback para cerrar el diálogo
+ */
+static void connect_dialog_response(GtkDialog *dialog, gint response_id, gpointer user_data)
 {
-	if( gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(gametype_button_secret) ) )
-		gtk_widget_set_sensitive( gametype_button_commonmission, 1 );
-	else
-		gtk_widget_set_sensitive( gametype_button_commonmission, 0 );
+	if (response_id == GTK_RESPONSE_OK) {
+		connect_button_clicked(NULL, NULL);
+	} else {
+		gtk_widget_destroy(GTK_WIDGET(dialog));
+		connect_window = NULL;
+	}
 }
 
-/* connection window */
-void connect_view()
+
+/**
+ * Muestra el diálogo de conexión
+ */
+void connect_view(void)
 {
+	GtkWidget *content_area;
+	GtkWidget *grid;
 	GtkWidget *label;
-	GtkWidget *table;
 	GtkWidget *frame;
-        GtkAdjustment *adj;
+	GtkWidget *vbox;
+	GtkAdjustment *adj;
 
-	/* metaserver */
-	GtkWidget *book, *vbox, *list, *scrolled, *update;
-	GtkTreeSelection *selection;
-	GtkCellRenderer *renderer;
-
-#ifdef WITH_GGZ
-	if( g_game.with_ggz ) {
-		connect_real();
+	/* Si ya existe, mostrar y enfocar */
+	if (connect_window != NULL) {
+		gtk_widget_show_all(connect_window);
+		gtk_window_present(GTK_WINDOW(connect_window));
 		return;
 	}
-#endif /* WITH_GGZ */
 
+	/* Crear diálogo */
+	connect_window = gtk_dialog_new_with_buttons(
+		_("Connect to server"),
+		GTK_WINDOW(main_window),
+		GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
+		_("_Connect"), GTK_RESPONSE_OK,
+		_("_Cancel"), GTK_RESPONSE_CANCEL,
+		NULL);
 
-	if( connect_window != NULL ) {
-		gtk_widget_show_all(connect_window);
-		raise_and_focus(connect_window);
-		return ;
-	}
-
-	connect_window = teg_dialog_new(_("Connect to server"),_("Connect to server")); 
-	gnome_dialog_append_buttons(GNOME_DIALOG(connect_window),
-		GNOME_STOCK_BUTTON_OK,
-		GNOME_STOCK_BUTTON_CANCEL,
-		NULL );
-	gnome_dialog_set_default(GNOME_DIALOG(connect_window),0);
-
-	gnome_dialog_button_connect (GNOME_DIALOG(connect_window),
-		1, GTK_SIGNAL_FUNC(destroy_window),&connect_window);
-
-	gnome_dialog_button_connect (GNOME_DIALOG(connect_window),
-		0, GTK_SIGNAL_FUNC(connect_button_con_cb),connect_window);
-
-	gtk_signal_connect( GTK_OBJECT(connect_window),
-			"delete_event", GTK_SIGNAL_FUNC(destroy_window),
-			&connect_window);
-
-	gtk_signal_connect( GTK_OBJECT(connect_window),
-			"destroy", GTK_SIGNAL_FUNC(destroy_window),
-			&connect_window);
-
-
-
-/* notebook: TEG Server Selection */
-	book = gtk_notebook_new();
-	gtk_box_pack_start(GTK_BOX(GNOME_DIALOG(connect_window)->vbox), book, TRUE, TRUE, 0);
-	label=gtk_label_new(_("TEG Server Selection"));
-	vbox=gtk_vbox_new(FALSE, 0);
-	gtk_notebook_append_page(GTK_NOTEBOOK (book), vbox, label);
-
-
-	/* server options */
-	table = gtk_table_new (3, 2, TRUE);
-	gtk_container_border_width (GTK_CONTAINER (table), GNOME_PAD_SMALL);
-	gtk_table_set_row_spacings (GTK_TABLE (table), GNOME_PAD_SMALL);
-	gtk_table_set_col_spacings (GTK_TABLE (table), GNOME_PAD_SMALL);
-
-	frame = gtk_frame_new (_("Server Options"));
-	gtk_container_border_width (GTK_CONTAINER (frame), 1);
-	gtk_container_add(GTK_CONTAINER(vbox), frame);
-
-	/* server port */
-	label = gtk_label_new(_("Server port:"));
-	gtk_table_attach_defaults( GTK_TABLE(table), label, 0, 1, 0, 1 );
-	adj = (GtkAdjustment *) gtk_adjustment_new( g_game.serport, 1.0, 65536.0, 1.0, 5.0, 1.0 );
-	con_spinner_port = gtk_spin_button_new( adj, 0.0, 0);
-	gtk_table_attach_defaults( GTK_TABLE(table), con_spinner_port, 1, 2, 0, 1 );
-
-	/* server name */
-	label = gtk_label_new(_("Server name:"));
-	gtk_table_attach_defaults( GTK_TABLE(table), label, 0, 1, 1, 2 );
-	con_entry_server = gtk_entry_new( );
-	gtk_entry_set_text( GTK_ENTRY( con_entry_server ), g_game.sername);
-	gtk_table_attach_defaults( GTK_TABLE(table), con_entry_server, 1, 2, 1, 2 );
+	gtk_window_set_default_size(GTK_WINDOW(connect_window), 400, 300);
 	
+	g_signal_connect(connect_window, "response", 
+	                 G_CALLBACK(connect_dialog_response), NULL);
+	g_signal_connect(connect_window, "destroy",
+	                 G_CALLBACK(gtk_widget_destroyed), &connect_window);
 
-	/* player name */
-	label = gtk_label_new(_("Name:"));
-	gtk_table_attach_defaults( GTK_TABLE(table), label, 0, 1, 2, 3 );
-	con_entry_name = gtk_entry_new( );
-	gtk_entry_set_text( GTK_ENTRY( con_entry_name ), g_game.myname);
-	gtk_table_attach_defaults( GTK_TABLE(table), con_entry_name, 1, 2, 2, 3 );
+	content_area = gtk_dialog_get_content_area(GTK_DIALOG(connect_window));
 
+	/* Frame de opciones del servidor */
+	frame = gtk_frame_new(_("Server Options"));
+	gtk_container_set_border_width(GTK_CONTAINER(frame), 10);
+	gtk_box_pack_start(GTK_BOX(content_area), frame, FALSE, FALSE, 0);
 
-	gtk_container_add(GTK_CONTAINER( frame), table );
+	grid = gtk_grid_new();
+	gtk_grid_set_row_spacing(GTK_GRID(grid), 6);
+	gtk_grid_set_column_spacing(GTK_GRID(grid), 12);
+	gtk_container_set_border_width(GTK_CONTAINER(grid), 10);
+	gtk_container_add(GTK_CONTAINER(frame), grid);
 
-	/* launch localhost server */
+	/* Puerto del servidor */
+	label = gtk_label_new(_("Server port:"));
+	gtk_widget_set_halign(label, GTK_ALIGN_END);
+	gtk_grid_attach(GTK_GRID(grid), label, 0, 0, 1, 1);
+
+	adj = gtk_adjustment_new(g_game.serport, 1.0, 65536.0, 1.0, 100.0, 0.0);
+	con_spinner_port = gtk_spin_button_new(adj, 1.0, 0);
+	gtk_widget_set_hexpand(con_spinner_port, TRUE);
+	gtk_grid_attach(GTK_GRID(grid), con_spinner_port, 1, 0, 1, 1);
+
+	/* Nombre del servidor */
+	label = gtk_label_new(_("Server name:"));
+	gtk_widget_set_halign(label, GTK_ALIGN_END);
+	gtk_grid_attach(GTK_GRID(grid), label, 0, 1, 1, 1);
+
+	con_entry_server = gtk_entry_new();
+	gtk_entry_set_text(GTK_ENTRY(con_entry_server), g_game.sername);
+	gtk_widget_set_hexpand(con_entry_server, TRUE);
+	gtk_grid_attach(GTK_GRID(grid), con_entry_server, 1, 1, 1, 1);
+
+	/* Nombre del jugador */
+	label = gtk_label_new(_("Player name:"));
+	gtk_widget_set_halign(label, GTK_ALIGN_END);
+	gtk_grid_attach(GTK_GRID(grid), label, 0, 2, 1, 1);
+
+	con_entry_name = gtk_entry_new();
+	gtk_entry_set_text(GTK_ENTRY(con_entry_name), g_game.myname);
+	gtk_widget_set_hexpand(con_entry_name, TRUE);
+	gtk_grid_attach(GTK_GRID(grid), con_entry_name, 1, 2, 1, 1);
+
+	/* Opciones adicionales */
+	vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+	gtk_container_set_border_width(GTK_CONTAINER(vbox), 10);
+	gtk_box_pack_start(GTK_BOX(content_area), vbox, FALSE, FALSE, 0);
+
+	/* Iniciar servidor local */
 	button_launch = gtk_check_button_new_with_label(_("Start server locally"));
-	gtk_container_add(GTK_CONTAINER(vbox), button_launch);
-	gtk_signal_connect (GTK_OBJECT (button_launch), "toggled",
-	    	GTK_SIGNAL_FUNC (prop_changed), NULL);
+	gtk_box_pack_start(GTK_BOX(vbox), button_launch, FALSE, FALSE, 0);
+	g_signal_connect(button_launch, "toggled", G_CALLBACK(launch_toggled), NULL);
 
-	/* observer mode */
-	button_observe = gtk_check_button_new_with_label(_("Dont play, just observe"));
-	gtk_container_add(GTK_CONTAINER(vbox), button_observe);
+	/* Modo observador */
+	button_observe = gtk_check_button_new_with_label(_("Don't play, just observe"));
+	gtk_box_pack_start(GTK_BOX(vbox), button_observe, FALSE, FALSE, 0);
 
-/* notebook: TEG Server Selection */
-	label=gtk_label_new(_("Metaserver"));
-	vbox=gtk_vbox_new(FALSE, 0);
-	gtk_notebook_append_page(GTK_NOTEBOOK (book), vbox, label);
-
-	metaserver_store = gtk_list_store_new(4, G_TYPE_STRING, G_TYPE_INT, G_TYPE_STRING, G_TYPE_STRING );
-
-	list = gtk_tree_view_new_with_model(GTK_TREE_MODEL(metaserver_store));
-	selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(list));
-	g_object_unref(metaserver_store);
-	gtk_tree_view_columns_autosize(GTK_TREE_VIEW(list));
-
-	renderer = gtk_cell_renderer_text_new();
-	gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW(list),
-		-1, _("Server Name"), renderer, "text", 0, NULL);
-	gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW(list),
-		-1, _("Port"), renderer, "text", 1, NULL);
-	gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW(list),
-		-1, _("Version"), renderer, "text", 2, NULL);
-	gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW(list),
-		-1, _("Status"), renderer, "text", 3, NULL);
-
-	scrolled=gtk_scrolled_window_new(NULL,NULL);
-	gtk_container_add(GTK_CONTAINER(scrolled), list);
-	gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled),
-			GTK_POLICY_AUTOMATIC, GTK_POLICY_ALWAYS);
-	gtk_box_pack_start(GTK_BOX(vbox), scrolled, TRUE, TRUE, 0);
-
-	update=gtk_button_new_with_label(_("Update"));
-	gtk_box_pack_start(GTK_BOX(vbox), update, FALSE, FALSE, 2);
-
-	g_signal_connect(selection, "changed",
-			G_CALLBACK(meta_list_callback), NULL);
-	g_signal_connect(update, "clicked",
-			G_CALLBACK(meta_update_callback), NULL);
-
-/* end*/
 	gtk_widget_show_all(connect_window);
-	raise_and_focus(connect_window);
 }
 
-/*
- * Select a color
+
+/**
+ * Callback OK del diálogo de selección de color
  */
-static void colortype_ok_cb (GtkWidget *window )
+static void colortype_ok_clicked(GtkWidget *button, gpointer user_data)
 {
 	int i;
 
-	for(i=0;i<TEG_MAX_PLAYERS;i++)  {
-		if( gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON( boton_color[i])) )
+	for (i = 0; i < TEG_MAX_PLAYERS; i++) {
+		if (boton_color[i] && 
+		    gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(boton_color[i]))) {
 			break;
+		}
 	}
 
-	out_color( i );
+	out_color(i);
 
 	gtk_widget_destroy(colortype_dialog);
 	colortype_dialog = NULL;
 }
 
-static GtkWidget *create_color_button( int i )
+
+/**
+ * Muestra el diálogo de selección de color
+ */
+void colortype_view(char *c)
 {
+	GtkWidget *content_area;
+	GtkWidget *frame;
+	GtkWidget *grid;
+	GtkWidget *image;
 	GtkWidget *vbox;
-	GnomeCanvasItem *image;
-	GtkWidget	*canvas;
+	int i;
+	int first_active = 1;
+	GSList *group = NULL;
 
-	if( i < 0 || i >= TEG_MAX_PLAYERS )
-		return NULL;
+	if (colortype_dialog != NULL) {
+		gtk_window_present(GTK_WINDOW(colortype_dialog));
+		return;
+	}
 
-	vbox = gtk_vbox_new (FALSE, 0);
-	if( ! vbox )
-		return NULL;
-
-	canvas = gnome_canvas_new();
-	if( ! canvas )
-		return NULL;
-
-	gtk_widget_set_usize (canvas, gdk_pixbuf_get_width(g_color_players[i]), gdk_pixbuf_get_height(g_color_players[i]) );
-	gnome_canvas_set_scroll_region (GNOME_CANVAS (canvas), 0, 0, 
-			gdk_pixbuf_get_width(g_color_players[i]),
-			gdk_pixbuf_get_height(g_color_players[i]) );
-	image = gnome_canvas_item_new(
-		gnome_canvas_root(GNOME_CANVAS(canvas)),
-		gnome_canvas_pixbuf_get_type (),
-		"pixbuf", g_color_players[i],
-		"x", 0.0,
-		"y", 0.0,
-		"width", (double) gdk_pixbuf_get_width(g_color_players[i]),
-		"height", (double) gdk_pixbuf_get_height(g_color_players[i]),
-		"anchor", GTK_ANCHOR_NW,
+	colortype_dialog = gtk_dialog_new_with_buttons(
+		_("Select your color"),
+		GTK_WINDOW(main_window),
+		GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
+		_("_OK"), GTK_RESPONSE_OK,
 		NULL);
 
-	if( ! image )
-		return NULL;
+	g_signal_connect(colortype_dialog, "destroy",
+	                 G_CALLBACK(gtk_widget_destroyed), &colortype_dialog);
 
-	gtk_box_pack_start_defaults( GTK_BOX(vbox), GTK_WIDGET(canvas));
-	gtk_widget_show (canvas);
+	content_area = gtk_dialog_get_content_area(GTK_DIALOG(colortype_dialog));
 
-	if( i==0 ) {
-		boton_color[i] = gtk_radio_button_new_with_label (NULL, _(g_colores[i]) );
-	} else {
-		boton_color[i] = gtk_radio_button_new_with_label_from_widget ( GTK_RADIO_BUTTON(boton_color[0]), _(g_colores[i]));
-	}
+	frame = gtk_frame_new(_("Select your desired color"));
+	gtk_container_set_border_width(GTK_CONTAINER(frame), 10);
+	gtk_box_pack_start(GTK_BOX(content_area), frame, TRUE, TRUE, 0);
 
-	gtk_box_pack_start_defaults(GTK_BOX (vbox), boton_color[i]);
-	gtk_widget_show ( boton_color[i] );
+	grid = gtk_grid_new();
+	gtk_grid_set_row_spacing(GTK_GRID(grid), 10);
+	gtk_grid_set_column_spacing(GTK_GRID(grid), 10);
+	gtk_container_set_border_width(GTK_CONTAINER(grid), 10);
+	gtk_container_add(GTK_CONTAINER(frame), grid);
 
-	return vbox;
-}
+	for (i = 0; i < TEG_MAX_PLAYERS; i++) {
+		vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
 
-/* show dialog of 'choose color' */
-void colortype_view( char *c)
-{
-	GtkWidget *frame;
-	GtkWidget *vbox_dia;
-	GtkWidget *table;
-	int i;
-	int first_active =1;
-
-	if( colortype_dialog != NULL ) {
-		gdk_window_show( colortype_dialog->window);
-		gdk_window_raise( colortype_dialog->window);
-		return ;
-	}
-
-	colortype_dialog = teg_dialog_new(_("Select your color"),_("Select your color"));
-
-	gtk_signal_connect (GTK_OBJECT (colortype_dialog), "destroy",
-			GTK_SIGNAL_FUNC (gtk_widget_destroyed), &colortype_dialog);
-
-	gnome_dialog_append_button( GNOME_DIALOG(colortype_dialog), GNOME_STOCK_BUTTON_OK);
-
-	gnome_dialog_button_connect(GNOME_DIALOG(colortype_dialog), 0, GTK_SIGNAL_FUNC(colortype_ok_cb), NULL);
-
-	vbox_dia = GNOME_DIALOG(colortype_dialog)->vbox;
-
-	/* desired color */
-	frame = gtk_frame_new (_("Select your desired color"));
-	gtk_container_border_width (GTK_CONTAINER (frame), 0);
-
-	table = gtk_table_new (2, 3, TRUE);
-	gtk_container_border_width (GTK_CONTAINER (table), GNOME_PAD_SMALL);
-	gtk_table_set_row_spacings (GTK_TABLE (table), GNOME_PAD_SMALL);
-	gtk_table_set_col_spacings (GTK_TABLE (table), GNOME_PAD_SMALL);
-
-
-	for(i=0;i<TEG_MAX_PLAYERS;i++) {
-		GtkWidget *button = create_color_button( i );
-
-		if( i%2 == 0 ) {
-			gtk_table_attach_defaults( GTK_TABLE(table), button, i/2, (i/2)+1, 0, 1 );
-		} else {
-			gtk_table_attach_defaults( GTK_TABLE(table), button, (i-1)/2, ((i-1)/2)+1, 1, 2 );
+		/* Imagen del color */
+		if (g_color_players[i]) {
+			image = gtk_image_new_from_pixbuf(g_color_players[i]);
+			gtk_box_pack_start(GTK_BOX(vbox), image, FALSE, FALSE, 0);
 		}
 
-		/* UGLY: I know that boton_color[i] is used... */
-		gtk_widget_set_sensitive( button, !c[i] );
-		if( !c[i] & first_active ) {
+		/* Radio button - g_colores es un array de strings en common/common.h */
+		boton_color[i] = gtk_radio_button_new_with_label(group, _(g_colores[i]));
+		group = gtk_radio_button_get_group(GTK_RADIO_BUTTON(boton_color[i]));
+		gtk_box_pack_start(GTK_BOX(vbox), boton_color[i], FALSE, FALSE, 0);
+
+		/* Posicionar en grid 2x3 */
+		gtk_grid_attach(GTK_GRID(grid), vbox, i % 3, i / 3, 1, 1);
+
+		/* Habilitar/deshabilitar según disponibilidad */
+		gtk_widget_set_sensitive(vbox, !c[i]);
+		if (!c[i] && first_active) {
 			first_active = 0;
-			gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (boton_color[i]), TRUE);
+			gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(boton_color[i]), TRUE);
 		}
 	}
 
-	gtk_container_add (GTK_CONTAINER (frame), table);
-	gtk_container_add (GTK_CONTAINER( vbox_dia), frame );
+	g_signal_connect(colortype_dialog, "response",
+	                 G_CALLBACK(colortype_ok_clicked), NULL);
 
-	/* show all */
-	if (!GTK_WIDGET_VISIBLE (colortype_dialog))
-		gtk_widget_show_all (colortype_dialog);
-	else
-		gtk_widget_destroy (colortype_dialog);
+	gtk_widget_show_all(colortype_dialog);
 }
 
-/* type of game: with secret missions, or to conquer the world */
-static void gametype_ok_cb (GtkWidget *window )
-{
-	int a,b,c,ar1,ar2;
 
-	a = gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(gametype_button_conqworld));
-	b = ! gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(gametype_button_viewall));
-	c = gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(gametype_button_commonmission) );
+/**
+ * Callback cuando se habilita/deshabilita misiones secretas
+ */
+static void button_secret_toggled(GtkToggleButton *button, gpointer user_data)
+{
+	gboolean active = gtk_toggle_button_get_active(button);
+	gtk_widget_set_sensitive(gametype_button_commonmission, active);
+}
+
+
+/**
+ * Callback OK del diálogo de tipo de juego
+ */
+static void gametype_ok_clicked(GtkWidget *button, gpointer user_data)
+{
+	int a, b, c, ar1, ar2;
+
+	a = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(gametype_button_conqworld));
+	b = !gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(gametype_button_viewall));
+	c = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(gametype_button_commonmission));
 	ar1 = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(gametype_spinner_armies1));
 	ar2 = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(gametype_spinner_armies2));
 
-	out_set_typeofgame( a, b, c, ar1, ar2 );
+	out_set_typeofgame(a, b, c, ar1, ar2);
 	out_start();
 
 	gtk_widget_destroy(gametype_dialog);
 	gametype_dialog = NULL;
 }
 
-/* Shows the dialog that choose the game type */
-void gametype_view( void )
+
+/**
+ * Muestra el diálogo de selección de tipo de juego
+ */
+void gametype_view(void)
 {
+	GtkWidget *content_area;
 	GtkWidget *frame;
-	GtkWidget *vbox_dia,*vbox, *hbox, *label;
-        GtkAdjustment *adj;
+	GtkWidget *vbox;
+	GtkWidget *hbox;
+	GtkWidget *label;
+	GtkAdjustment *adj;
+	GSList *group;
 
-	if( gametype_dialog != NULL ) {
-		gdk_window_show( gametype_dialog->window);
-		gdk_window_raise( gametype_dialog->window);
-		return ;
+	if (gametype_dialog != NULL) {
+		gtk_window_present(GTK_WINDOW(gametype_dialog));
+		return;
 	}
 
-	gametype_dialog = teg_dialog_new(_("Select type of game"),_("Select type of game"));
+	gametype_dialog = gtk_dialog_new_with_buttons(
+		_("Select type of game"),
+		GTK_WINDOW(main_window),
+		GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
+		_("_OK"), GTK_RESPONSE_OK,
+		NULL);
 
-	gtk_signal_connect (GTK_OBJECT (gametype_dialog), "destroy",
-			GTK_SIGNAL_FUNC (gtk_widget_destroyed), &gametype_dialog);
+	g_signal_connect(gametype_dialog, "destroy",
+	                 G_CALLBACK(gtk_widget_destroyed), &gametype_dialog);
+	g_signal_connect(gametype_dialog, "response",
+	                 G_CALLBACK(gametype_ok_clicked), NULL);
 
-	gnome_dialog_append_button( GNOME_DIALOG(gametype_dialog), GNOME_STOCK_BUTTON_OK);
+	content_area = gtk_dialog_get_content_area(GTK_DIALOG(gametype_dialog));
 
-	gnome_dialog_button_connect(GNOME_DIALOG(gametype_dialog), 0, GTK_SIGNAL_FUNC(gametype_ok_cb), NULL);
+	/* Frame de Misiones */
+	frame = gtk_frame_new(_("Missions"));
+	gtk_container_set_border_width(GTK_CONTAINER(frame), 10);
+	gtk_box_pack_start(GTK_BOX(content_area), frame, FALSE, FALSE, 0);
 
-	vbox_dia = GNOME_DIALOG(gametype_dialog)->vbox;
+	vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+	gtk_container_set_border_width(GTK_CONTAINER(vbox), 10);
+	gtk_container_add(GTK_CONTAINER(frame), vbox);
 
-	/* Conquer the world / Secret missions */
-	frame = gtk_frame_new (_("Missions"));
-	gtk_container_border_width (GTK_CONTAINER (frame), 0);
+	gametype_button_conqworld = gtk_radio_button_new_with_label(
+		NULL, _("Play to conquer the world"));
+	gtk_box_pack_start(GTK_BOX(vbox), gametype_button_conqworld, FALSE, FALSE, 0);
+	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(gametype_button_conqworld), TRUE);
 
-	vbox = gtk_vbox_new (FALSE, 0);
+	group = gtk_radio_button_get_group(GTK_RADIO_BUTTON(gametype_button_conqworld));
+	gametype_button_secret = gtk_radio_button_new_with_label(
+		group, _("Play with secret missions"));
+	gtk_box_pack_start(GTK_BOX(vbox), gametype_button_secret, FALSE, FALSE, 0);
+	g_signal_connect(gametype_button_secret, "toggled",
+	                 G_CALLBACK(button_secret_toggled), NULL);
 
-	gametype_button_conqworld =
-		gtk_radio_button_new_with_label (
-				NULL, _("Play to conquer the world"));
-	gtk_box_pack_start_defaults(GTK_BOX (vbox), gametype_button_conqworld);
-	gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (gametype_button_conqworld), TRUE);
+	gametype_button_commonmission = gtk_check_button_new_with_label(
+		_("Play with common mission\n(One wins, also, conquering 45 countries)"));
+	gtk_widget_set_sensitive(gametype_button_commonmission, FALSE);
+	gtk_widget_set_margin_start(gametype_button_commonmission, 20);
+	gtk_box_pack_start(GTK_BOX(vbox), gametype_button_commonmission, FALSE, FALSE, 0);
 
-	gametype_button_secret =
-		gtk_radio_button_new_with_label (
-			gtk_radio_button_group (GTK_RADIO_BUTTON (gametype_button_conqworld)), _("Play with secret missions"));
-	gtk_box_pack_start_defaults(GTK_BOX (vbox), gametype_button_secret);
-	gtk_signal_connect (GTK_OBJECT (gametype_button_secret), "toggled",
-	    	GTK_SIGNAL_FUNC (button_secret_enabled), NULL);
+	/* Frame de Visibilidad */
+	frame = gtk_frame_new(_("Visibility"));
+	gtk_container_set_border_width(GTK_CONTAINER(frame), 10);
+	gtk_box_pack_start(GTK_BOX(content_area), frame, FALSE, FALSE, 0);
 
-	hbox = gtk_hbox_new( FALSE, 0 );
-	gametype_button_commonmission = gtk_check_button_new_with_label(_("Play with common mission\n(One wins, also, conquering 45 countries)"));
-	gtk_widget_set_sensitive( gametype_button_commonmission, 0 );
-	gtk_box_pack_start_defaults(GTK_BOX (hbox), gametype_button_commonmission);
-	gtk_box_pack_start_defaults(GTK_BOX (vbox), hbox);
+	vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+	gtk_container_set_border_width(GTK_CONTAINER(vbox), 10);
+	gtk_container_add(GTK_CONTAINER(frame), vbox);
 
-	gtk_container_add (GTK_CONTAINER (frame), vbox);
+	gametype_button_viewall = gtk_radio_button_new_with_label(
+		NULL, _("Standard (You see all countries)"));
+	gtk_box_pack_start(GTK_BOX(vbox), gametype_button_viewall, FALSE, FALSE, 0);
+	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(gametype_button_viewall), TRUE);
 
-	gtk_container_add (GTK_CONTAINER( vbox_dia), frame );
+	group = gtk_radio_button_get_group(GTK_RADIO_BUTTON(gametype_button_viewall));
+	gametype_button_fow = gtk_radio_button_new_with_label(
+		group, _("Fog of War (You see only border countries)"));
+	gtk_box_pack_start(GTK_BOX(vbox), gametype_button_fow, FALSE, FALSE, 0);
 
-	/* Fog of War / Normal */
-	frame = gtk_frame_new (_("Visibility"));
-	gtk_container_border_width (GTK_CONTAINER (frame), 0);
+	/* Frame de Ejércitos */
+	frame = gtk_frame_new(_("Armies"));
+	gtk_container_set_border_width(GTK_CONTAINER(frame), 10);
+	gtk_box_pack_start(GTK_BOX(content_area), frame, FALSE, FALSE, 0);
 
-	vbox = gtk_vbox_new (TRUE, 0);
+	vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+	gtk_container_set_border_width(GTK_CONTAINER(vbox), 10);
+	gtk_container_add(GTK_CONTAINER(frame), vbox);
 
-	gametype_button_viewall=
-		gtk_radio_button_new_with_label (
-				NULL, _("Standard (You see all countries)"));
-	gtk_box_pack_start_defaults(GTK_BOX (vbox), gametype_button_viewall);
-	gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (gametype_button_viewall), TRUE);
+	/* Ejércitos paso 1 */
+	hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+	gtk_box_pack_start(GTK_BOX(vbox), hbox, FALSE, FALSE, 0);
 
-	gametype_button_fow=
-		gtk_radio_button_new_with_label (
-			gtk_radio_button_group (GTK_RADIO_BUTTON (gametype_button_viewall)), _("Fog of War (You see only border countries)"));
-	gtk_box_pack_start_defaults(GTK_BOX (vbox), gametype_button_fow);
+	label = gtk_label_new(_("Armies to place in the 1st step:"));
+	gtk_box_pack_start(GTK_BOX(hbox), label, FALSE, FALSE, 0);
 
-	gtk_container_add (GTK_CONTAINER (frame), vbox);
+	adj = gtk_adjustment_new(8, 1.0, 30.0, 1.0, 5.0, 0.0);
+	gametype_spinner_armies1 = gtk_spin_button_new(adj, 1.0, 0);
+	gtk_box_pack_end(GTK_BOX(hbox), gametype_spinner_armies1, FALSE, FALSE, 0);
 
-	gtk_container_add (GTK_CONTAINER( vbox_dia), frame );
+	/* Ejércitos paso 2 */
+	hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+	gtk_box_pack_start(GTK_BOX(vbox), hbox, FALSE, FALSE, 0);
 
-	/* Armies */
-	frame = gtk_frame_new (_("Armies"));
-	gtk_container_border_width (GTK_CONTAINER (frame), 0);
+	label = gtk_label_new(_("Armies to place in the 2nd step:"));
+	gtk_box_pack_start(GTK_BOX(hbox), label, FALSE, FALSE, 0);
 
-	vbox = gtk_vbox_new (TRUE, 0);
+	adj = gtk_adjustment_new(4, 1.0, 25.0, 1.0, 5.0, 0.0);
+	gametype_spinner_armies2 = gtk_spin_button_new(adj, 1.0, 0);
+	gtk_box_pack_end(GTK_BOX(hbox), gametype_spinner_armies2, FALSE, FALSE, 0);
 
-	/* 1 */
-	hbox = gtk_hbox_new( FALSE, 0 );
-	label = gtk_label_new(_("Armies to place in the 1st step"));
-	gtk_box_pack_start_defaults(GTK_BOX (hbox), label);
-	adj = (GtkAdjustment *) gtk_adjustment_new( 8, 1.0, 30.0, 1.0, 5.0, 1.0 );
-	gametype_spinner_armies1 = gtk_spin_button_new( adj, 0.0, 0);
-	gtk_box_pack_start_defaults(GTK_BOX (hbox), gametype_spinner_armies1);
-	gtk_container_add (GTK_CONTAINER (vbox), hbox);
-
-	/* 2 */
-	hbox = gtk_hbox_new( FALSE, 0 );
-	label = gtk_label_new(_("Armies to place in the 2nd step"));
-	gtk_box_pack_start_defaults(GTK_BOX (hbox), label);
-	adj = (GtkAdjustment *) gtk_adjustment_new( 4, 1.0, 25.0, 1.0, 5.0, 1.0 );
-	gametype_spinner_armies2 = gtk_spin_button_new( adj, 0.0, 0);
-	gtk_box_pack_start_defaults(GTK_BOX (hbox), gametype_spinner_armies2);
-	gtk_container_add (GTK_CONTAINER (vbox), hbox);
-
-
-	gtk_container_add (GTK_CONTAINER (frame), vbox);
-
-	gtk_container_add (GTK_CONTAINER( vbox_dia), frame );
-
-
-	/* show all */
-	if (!GTK_WIDGET_VISIBLE (gametype_dialog))
-		gtk_widget_show_all (gametype_dialog);
-	else
-		gtk_widget_destroy (gametype_dialog);
-}
-
-
-/* metaserver helpers */
-static void meta_update_callback(GtkWidget *w, gpointer data)
-{
-	GtkTreeIter iter;
-	PMETASERVER pM;
-	PLIST_ENTRY l;
-
-	gtk_list_store_clear( metaserver_store );
-
-	if( metaserver_get_servers() != TEG_STATUS_SUCCESS )
-		return;
-
-	l = g_list_metaserver.Flink;
-
-	while( !IsListEmpty( &g_list_metaserver ) && (l != &g_list_metaserver) )
-	{
-		pM = (PMETASERVER) l;
-
-		gtk_list_store_append (metaserver_store, &iter);
-		gtk_list_store_set (metaserver_store, &iter,
-				METASERVER_NAME, pM->name,
-				METASERVER_PORT, pM->port,
-				METASERVER_VERSION, pM->version,
-				METASERVER_COMMENT, pM->comment,
-				-1 );
-
-		l = LIST_NEXT(l);
-	}
-
-	return ;
-}
-
-static void meta_list_callback(GtkTreeSelection *select, GtkTreeModel *dummy)
-{
-	GtkTreeIter it;
-	char *name;
-	int port;
-
-	if (!gtk_tree_selection_get_selected(select, NULL, &it))
-		return;
-
-	gtk_tree_model_get(GTK_TREE_MODEL(metaserver_store), &it,
-			METASERVER_NAME, &name,
-			METASERVER_PORT, &port,
-			-1);
-
-	gtk_entry_set_text( GTK_ENTRY( con_entry_server ), name);
-	gtk_spin_button_set_value(GTK_SPIN_BUTTON(con_spinner_port), port);
+	gtk_widget_show_all(gametype_dialog);
 }

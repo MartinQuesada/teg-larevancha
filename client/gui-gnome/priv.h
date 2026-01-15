@@ -22,8 +22,7 @@
 #ifndef __TEG_GUI_GNOME_PRIV_H
 #define __TEG_GUI_GNOME_PRIV_H
 
-#include <gnome.h>
-#include <gconf/gconf-client.h>
+#include "gnome-compat.h"
 
 enum {
 	DIALOG_ATTACK_TURN,
@@ -42,6 +41,10 @@ struct _gui_private {
 
 extern struct _gui_private gui_private;
 
+/* GSettings for storing preferences (replaces GConf) */
+extern GSettings *g_settings;
+
+/* Deprecated: use g_settings instead */
 extern GConfClient *g_conf_client;
 
 TEG_STATUS priv_init( void );

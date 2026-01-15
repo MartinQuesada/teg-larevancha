@@ -22,7 +22,7 @@
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
-#include <gnome.h>
+#include "gnome-compat.h"
 
 #include "gui.h"
 #include "client.h"
@@ -33,7 +33,7 @@
 struct _gui_private gui_private;
 
 /* Prefs */
-GConfClient *g_conf_client = NULL;
+GSettings *g_settings = NULL;
 
 TEG_STATUS priv_init( void )
 {

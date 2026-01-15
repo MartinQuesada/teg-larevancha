@@ -33,8 +33,8 @@ from ttoolkit import *
 import eventmgr
 import theme
 
-class GUI( object ):
-    def __init__( self ):
+class GUI(object):
+    def __init__(self):
 
         # default size
         self.surface = pygame.display.set_mode( (800,600) )
@@ -44,7 +44,7 @@ class GUI( object ):
         self._model = model.Model.getInstance()
         self._display = None
 
-    def initScreen( self ):
+    def initScreen(self):
 #        try:
 #            self.surface = pygame.display.set_mode( self._theme['screen']['size'] )
 #        except Exception:
@@ -93,7 +93,7 @@ class GUI( object ):
         w.update()
 
 
-    def mainLoop( self ):
+    def mainLoop(self):
 
         ## XXX: This should be moved to TDisplay
         self._eventMgr = eventmgr.EventMgr()
@@ -109,5 +109,5 @@ class GUI( object ):
 
         self._eventMgr.loop()
 
-    def setTheme( self, theme ):
+    def setTheme(self, theme):
         self._theme = theme 

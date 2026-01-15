@@ -18,21 +18,33 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.
  */
+/**
+ * @file g_cont.h
+ * Manejo de continentes - Migrado a GTK3/Cairo
+ */
 
 #ifndef __TEG_GUI_GNOME_GCONT_H
 #define __TEG_GUI_GNOME_GCONT_H
 
-#include <gnome.h>
+#include <gtk/gtk.h>
+#include "cont.h"  /* Para CONT_CANT */
 
+/**
+ * Estructura de datos de continente para la GUI
+ * En GTK3/Cairo ya no usamos GnomeCanvasGroup
+ */
 struct _G_conts {
-	GnomeCanvasGroup *cont_group;
-	int x;
-	int y;
+	int x;  /**< Posición X del continente */
+	int y;  /**< Posición Y del continente */
 };
 
 extern struct _G_conts G_conts[];
 
-void G_cont_create( int cont, GnomeCanvasGroup *root );
-int G_cont_tot();
+/* Funciones */
+void G_cont_init(void);
+void G_cont_create(int cont);
+int G_cont_get_x(int cont);
+int G_cont_get_y(int cont);
+int G_cont_tot(void);
 
 #endif /* __TEG_GUI_GNOME_GCONT_H */

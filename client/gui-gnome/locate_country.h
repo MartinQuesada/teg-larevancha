@@ -25,15 +25,18 @@
 #define __TEG_GUI_GNOME_LOCATE_COUNTRY_H
 
 /* constructor */
-TEG_STATUS locate_country_init();
+TEG_STATUS locate_country_init(void);
 
 /* destructor */
-TEG_STATUS locate_country_exit();
+TEG_STATUS locate_country_exit(void);
 
 /* adds a country to view */
-TEG_STATUS locate_country_add_country( PCOUNTRY p );
+TEG_STATUS locate_country_add_country(PCOUNTRY p);
 
 /* adds the country's army to view */
-TEG_STATUS locate_country_add_army( PCOUNTRY p );
+TEG_STATUS locate_country_add_army(int country);
+
+/* check if a country is currently in blink (hidden) state */
+int locate_country_is_blinking(int country);
 
 #endif /* __TEG_GUI_GNOME_LOCATE_COUNTRY_H */

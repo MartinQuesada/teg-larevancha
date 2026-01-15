@@ -25,7 +25,7 @@ else
 GSUBDIRS =
 endif
 
-SUBDIRS= macros po common docs metaserver $(GSUBDIRS) $(SSUBDIRS) $(CSUBDIRS) $(RSUBDIRS)
+SUBDIRS= macros po common docs metaserver python $(GSUBDIRS) $(SSUBDIRS) $(CSUBDIRS) $(RSUBDIRS)
 
 EXTRA_DIST= teg-ggz.rh.spec teg.suse.spec teg.rh.spec README README.GGZ HACKING PEOPLE protocol.txt ReleaseNotes.txt
 

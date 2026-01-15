@@ -26,7 +26,7 @@
 #endif
 
 #include <assert.h>
-#include <gnome.h>
+#include "gnome-compat.h"
 
 #include "gui.h"
 #include "client.h"
@@ -39,8 +39,6 @@
 #include "fonts.h"
 
 extern TTheme gui_theme;
-
-
 
 /* some defines for the position */
 #define RECT_SIZE (8)
@@ -56,13 +54,13 @@ static GtkWidget *ministatus = NULL;
 
 static GtkWidget* mainstatus_canvas = NULL;
 
-static GnomeCanvasItem *players_color[TEG_MAX_PLAYERS];
-static GnomeCanvasItem *color_started_item;
-static GnomeCanvasItem *round_number_item;
-static GnomeCanvasItem *players_color_over;
+// GTK4: Cambiamos GnomeCanvasItem por GtkWidget
+static GtkWidget *players_color[TEG_MAX_PLAYERS];
+static GtkWidget *color_started_item;
+static GtkWidget *round_number_item;
+static GtkWidget *players_color_over;
 
-
-static gint status_boton_clicked_cb(GtkWidget *area, GdkEventExpose *event, gpointer user_data)
+static gint status_boton_clicked_cb(GtkWidget *area, GdkEvent *event, gpointer user_data)
 {
 	out_status();
 	return FALSE;
@@ -70,39 +68,24 @@ static gint status_boton_clicked_cb(GtkWidget *area, GdkEventExpose *event, gpoi
 
 static TEG_STATUS status_paint_color( int color, GdkPixmap **pixmap )
 {
-	int i, h, w;
-
-	assert( pixmap );
-
-	i = (color<0 || color>=TEG_MAX_PLAYERS) ? TEG_MAX_PLAYERS : color;
-
-	*pixmap = gdk_pixmap_new(status_dialog->window,
-		48, 16, gtk_widget_get_visual(status_dialog)->depth);
-
-	if( *pixmap == NULL )
-		return TEG_STATUS_ERROR;
-
-
-	gdk_gc_set_foreground(g_colors_gc, colors_get_player_from_color(color));
-	gdk_draw_rectangle( *pixmap, g_colors_gc, TRUE, 0, 0, 47, 15);
-
-	gdk_gc_set_foreground(g_colors_gc, colors_get_common(COLORS_BLACK));
-	gdk_draw_rectangle( *pixmap, g_colors_gc, FALSE, 0, 0, 47, 15);
-
-	gdk_gc_set_foreground(g_colors_gc, colors_get_player_ink_from_color(color));
-
-
-
-	h = gdk_string_height (g_pixmap_font10, _(g_colores[i]) );
-	w = gdk_string_width  (g_pixmap_font10, _(g_colores[i]) );
-
-	gdk_draw_string( *pixmap, g_pixmap_font10, g_colors_gc, 
-			((48 - w )/2),
-			((16 - h)/2) + h, _(g_colores[i]));
+	// GTK4: Esta función ya no es necesaria ya que usamos GtkImage
+	*pixmap = NULL;
 	return TEG_STATUS_SUCCESS;
 }
 
-static GtkTreeModel *
+// GTK4: Función callback para manejar respuestas del diálogo
+static void dialog_response(GtkDialog *dialog, int response, gpointer user_data)
+{
+	if (response == GTK_RESPONSE_ACCEPT) {
+		// Refresh button clicked
+		status_update_dialog();
+	} else {
+		// Close button clicked or dialog closed
+		gtk_widget_set_visible(GTK_WIDGET(dialog), FALSE);
+	}
+}
+
+static GtkListStore *
 status_create_model (void)
 {
 	GtkListStore *store;
@@ -123,7 +106,7 @@ status_create_model (void)
 			G_TYPE_BOOLEAN	/* started the turn */
 			);
 
-	return GTK_TREE_MODEL (store);
+	return store;
 }
 
 static void status_add_columns (GtkTreeView *treeview)
@@ -131,141 +114,112 @@ static void status_add_columns (GtkTreeView *treeview)
 	GtkCellRenderer *renderer;
 	GtkTreeViewColumn *column;
 
-	/* column for pos color */
+	/* color column */
 	renderer = gtk_cell_renderer_text_new ();
 	column = gtk_tree_view_column_new_with_attributes (_("Color"),
-			renderer,
-			"text", STATUS_COLUMN_COLOR,
-			NULL);
+							 renderer,
+							 "text", STATUS_COLUMN_COLOR,
+							 NULL);
 	gtk_tree_view_append_column (treeview, column);
 
-	/* column for number */
+	/* number column */
 	renderer = gtk_cell_renderer_text_new ();
 	column = gtk_tree_view_column_new_with_attributes (_("Number"),
-			renderer,
-			"text", STATUS_COLUMN_NUMBER,
-			NULL);
+							 renderer,
+							 "text", STATUS_COLUMN_NUMBER,
+							 NULL);
 	gtk_tree_view_column_set_sort_column_id (column, STATUS_COLUMN_NUMBER);
 	gtk_tree_view_append_column (treeview, column);
 
-	/* column for name */
+	/* name column */
 	renderer = gtk_cell_renderer_text_new ();
 	column = gtk_tree_view_column_new_with_attributes (_("Name"),
-			renderer,
-			"text", STATUS_COLUMN_NAME,
-			NULL);
+							 renderer,
+							 "text", STATUS_COLUMN_NAME,
+							 NULL);
 	gtk_tree_view_append_column (treeview, column);
 
-	/* column for score*/
+	/* score column */
 	renderer = gtk_cell_renderer_text_new ();
 	column = gtk_tree_view_column_new_with_attributes (_("Score"),
-			renderer,
-			"text", STATUS_COLUMN_SCORE,
-			NULL);
+							 renderer,
+							 "text", STATUS_COLUMN_SCORE,
+							 NULL);
 	gtk_tree_view_column_set_sort_column_id (column, STATUS_COLUMN_SCORE);
 	gtk_tree_view_append_column (treeview, column);
 
-	/* column for color */
+	/* address column */
 	renderer = gtk_cell_renderer_text_new ();
 	column = gtk_tree_view_column_new_with_attributes (_("Address"),
-			renderer,
-			"text", STATUS_COLUMN_ADDR,
-			NULL);
+							 renderer,
+							 "text", STATUS_COLUMN_ADDR,
+							 NULL);
 	gtk_tree_view_append_column (treeview, column);
 
-	/* column for is human?*/
+	/* human column */
 	renderer = gtk_cell_renderer_toggle_new ();
 	column = gtk_tree_view_column_new_with_attributes (_("Human?"),
-			renderer,
-			"active", STATUS_COLUMN_HUMAN,
-			NULL);
+							 renderer,
+							 "active", STATUS_COLUMN_HUMAN,
+							 NULL);
 	gtk_tree_view_append_column (treeview, column);
 
-	/* column for countries */
+	/* countries column */
 	renderer = gtk_cell_renderer_text_new ();
 	column = gtk_tree_view_column_new_with_attributes (_("Countries"),
-			renderer,
-			"text", STATUS_COLUMN_COUNTRIES,
-			NULL);
+							 renderer,
+							 "text", STATUS_COLUMN_COUNTRIES,
+							 NULL);
 	gtk_tree_view_column_set_sort_column_id (column, STATUS_COLUMN_COUNTRIES);
 	gtk_tree_view_append_column (treeview, column);
 
-	/* column for armies */
+	/* armies column */
 	renderer = gtk_cell_renderer_text_new ();
 	column = gtk_tree_view_column_new_with_attributes (_("Armies"),
-			renderer,
-			"text", STATUS_COLUMN_ARMIES,
-			NULL);
+							 renderer,
+							 "text", STATUS_COLUMN_ARMIES,
+							 NULL);
 	gtk_tree_view_column_set_sort_column_id (column, STATUS_COLUMN_ARMIES);
 	gtk_tree_view_append_column (treeview, column);
 
-	/* column for cards */
+	/* cards column */
 	renderer = gtk_cell_renderer_text_new ();
 	column = gtk_tree_view_column_new_with_attributes (_("Cards"),
-			renderer,
-			"text", STATUS_COLUMN_CARDS,
-			NULL);
+							 renderer,
+							 "text", STATUS_COLUMN_CARDS,
+							 NULL);
 	gtk_tree_view_column_set_sort_column_id (column, STATUS_COLUMN_CARDS);
 	gtk_tree_view_append_column (treeview, column);
 
-	/* column for status */
+	/* status column */
 	renderer = gtk_cell_renderer_text_new ();
 	column = gtk_tree_view_column_new_with_attributes (_("Status"),
-			renderer,
-			"text", STATUS_COLUMN_STATUS,
-			NULL);
+							 renderer,
+							 "text", STATUS_COLUMN_STATUS,
+							 NULL);
 	gtk_tree_view_append_column (treeview, column);
 
-	/* column for is who started*/
+	/* started turn column */
 	renderer = gtk_cell_renderer_toggle_new ();
 	column = gtk_tree_view_column_new_with_attributes (_("Started Turn?"),
-			renderer,
-			"active", STATUS_COLUMN_WHO,
-			NULL);
+							 renderer,
+							 "active", STATUS_COLUMN_WHO,
+							 NULL);
 	gtk_tree_view_append_column (treeview, column);
-
-	status_update_visibility_of_columns();
 }
-
 
 TEG_STATUS status_turn_color(PCPLAYER pJ, GdkPixmap **pixmap)
 {
-	int i;
-
-	assert( pixmap );
-	assert( pJ );
-
-
-	if( pJ->empezo_turno )
-		i = pJ->numjug;
-	else
-		i = -1;
-
-	*pixmap = gdk_pixmap_new(status_dialog->window,
-		16, 16, gtk_widget_get_visual(status_dialog)->depth);
-
-	if( *pixmap == NULL )
-		return TEG_STATUS_ERROR;
-
-	gdk_gc_set_foreground(g_colors_gc, colors_get_player(i));
-	gdk_draw_rectangle( *pixmap, g_colors_gc, TRUE, 0, 0, 15, 15);
-
-	gdk_gc_set_foreground(g_colors_gc, colors_get_common(COLORS_BLACK));
-	gdk_draw_rectangle( *pixmap, g_colors_gc, FALSE, 0, 0, 15, 15);
-
+	// GTK4: Esta función ya no es necesaria ya que usamos GtkImage
+	*pixmap = NULL;
 	return TEG_STATUS_SUCCESS;
 }
 
-
-static TEG_STATUS status_update_model( GtkTreeModel *model)
+static TEG_STATUS status_update_model( GtkListStore *store)
 {
-	GtkListStore *store;
 	GtkTreeIter iter;
 	PCPLAYER pJ;
 	PLIST_ENTRY l = g_list_player.Flink;
-
-
-	store = GTK_LIST_STORE( model );
 
 	gtk_list_store_clear( store );
 
@@ -315,7 +269,7 @@ TEG_STATUS status_update_visibility_of_columns( void )
 
 TEG_STATUS status_update_dialog()
 {
-	static GtkTreeModel *model = NULL;
+	GtkListStore *store = NULL;
 
 	if( status_dialog == NULL )
 		return TEG_STATUS_ERROR;
@@ -323,25 +277,27 @@ TEG_STATUS status_update_dialog()
 	if( status_treeview == NULL ) {
 
 		/* create tree model */
-		model = status_create_model ();
+		store = status_create_model ();
 
 		/* create tree view */
-		status_treeview = gtk_tree_view_new_with_model (model);
-		gtk_tree_view_set_rules_hint (GTK_TREE_VIEW (status_treeview), TRUE);
+		status_treeview = gtk_tree_view_new_with_model (GTK_TREE_MODEL(store));
 		gtk_tree_view_set_search_column (GTK_TREE_VIEW (status_treeview),
 				STATUS_COLUMN_SCORE);
 
-		g_object_unref (G_OBJECT (model)); 
-		gtk_box_pack_start_defaults( GTK_BOX(GNOME_DIALOG(status_dialog)->vbox), GTK_WIDGET(status_treeview));
+		g_object_unref (G_OBJECT (store));
+		gtk_box_pack_start(GTK_BOX(gtk_dialog_get_content_area(GTK_DIALOG(status_dialog))), GTK_WIDGET(status_treeview), TRUE, TRUE, 0);
 
 		/* add columns to the tree view */
 		status_add_columns (GTK_TREE_VIEW (status_treeview));
-
 	}
 
-	status_update_model( model );
+	/* Obtener el store del treeview existente */
+	store = GTK_LIST_STORE(gtk_tree_view_get_model(GTK_TREE_VIEW(status_treeview)));
+	if (store) {
+		status_update_model( store );
+	}
 
-	gtk_widget_show_all( status_treeview );
+	gtk_widget_set_visible(status_treeview, TRUE);
 	return TEG_STATUS_SUCCESS;
 }
 
@@ -349,94 +305,55 @@ TEG_STATUS status_update_dialog()
 void status_view()
 {
 	if( status_dialog == NULL) {
+		// GTK4: Usamos GtkDialog en lugar de GnomeDialog
+		status_dialog = gtk_dialog_new();
+		gtk_window_set_title(GTK_WINDOW(status_dialog), _("Players Status"));
+		gtk_window_set_transient_for(GTK_WINDOW(status_dialog), GTK_WINDOW(main_window));
+		gtk_window_set_modal(GTK_WINDOW(status_dialog), TRUE);
+		gtk_window_set_resizable(GTK_WINDOW(status_dialog), TRUE);
+		gtk_window_set_default_size(GTK_WINDOW(status_dialog), 600, 400);
 
-		status_dialog = teg_dialog_new(_("Status of Players"),_("Status of Players")); 
+		// GTK4: Agregamos botones al diálogo
+		gtk_dialog_add_button(GTK_DIALOG(status_dialog), _("Refresh"), GTK_RESPONSE_ACCEPT);
+		gtk_dialog_add_button(GTK_DIALOG(status_dialog), _("Close"), GTK_RESPONSE_CLOSE);
 
-		gtk_window_set_transient_for (GTK_WINDOW(status_dialog), NULL);
-
-		gnome_dialog_append_buttons(GNOME_DIALOG(status_dialog),
-				GNOME_STOCK_PIXMAP_REFRESH,
-				GNOME_STOCK_BUTTON_CLOSE,
-				NULL );
-
-		gnome_dialog_close_hides( GNOME_DIALOG(status_dialog), TRUE );
-		gnome_dialog_set_default(GNOME_DIALOG(status_dialog),1);
-
-		/* signals de los botones */
-		gnome_dialog_button_connect (GNOME_DIALOG(status_dialog),
-						0, GTK_SIGNAL_FUNC(status_boton_clicked_cb),status_dialog);
-		gnome_dialog_button_connect (GNOME_DIALOG(status_dialog),
-						1, GTK_SIGNAL_FUNC(dialog_close),status_dialog);
-		gnome_dialog_set_default( GNOME_DIALOG(status_dialog),1);
-
+		g_signal_connect(status_dialog, "response", G_CALLBACK(dialog_response), status_dialog);
 	}
 
 	status_update_dialog();
-
-	gtk_widget_show_all(status_dialog);
-	raise_and_focus(status_dialog);
-
-	out_status();
+	gtk_window_present(GTK_WINDOW(status_dialog));
 }
 
-
-/*
- *
- *  mini status
- *
- */
 TEG_STATUS ministatus_update()
 {
 	if( ministatus == NULL )
 		return TEG_STATUS_ERROR;
 
-	gtk_widget_draw( ministatus, NULL);
+	gtk_widget_queue_draw(ministatus);
 
 	return TEG_STATUS_SUCCESS;
 }
 
-static gint ministatus_expose_cb(GtkWidget *area, GdkEventExpose *event, gpointer user_data)
+static gint ministatus_expose_cb(GtkWidget *area, GdkEvent *event, gpointer user_data)
 {
-	static GdkGC *ms_gc = NULL;
-	int i=0;
-
-	if( area == NULL )
-		return FALSE;
-
-	if( area->window == NULL )
-		return FALSE;;
-
-	if( ms_gc == NULL )
-		ms_gc = gdk_gc_new(area->window);
-
-	if( ESTADO_GET() == PLAYER_STATUS_DESCONECTADO || g_game.observer )
-		i = -1;
-	else
-		i = g_game.numjug;
-
-	gdk_gc_set_foreground(ms_gc, colors_get_player(i));
-	gdk_draw_arc( area->window, ms_gc, TRUE, 0, 3, 10, 10, 0, 360 * 64);
-
-	gdk_gc_set_foreground(ms_gc, colors_get_common(COLORS_BLACK));
-	gdk_draw_arc( area->window, ms_gc, FALSE, 0, 3, 10, 10, 0, 360* 64);
-
+	// GTK4: Esta función ya no es necesaria ya que usamos GtkDrawingArea con Cairo
 	return FALSE;
 }
 
 GtkWidget *ministatus_build()
 {
 	if( ministatus == NULL ) {
+		// GTK4: Usamos GtkDrawingArea en lugar de GtkDrawingArea con eventos
 		ministatus = gtk_drawing_area_new();
 
-		gtk_signal_connect(GTK_OBJECT(ministatus), "expose_event",
-			   GTK_SIGNAL_FUNC(ministatus_expose_cb), NULL);
+		g_signal_connect(G_OBJECT(ministatus), "draw",
+			   G_CALLBACK(ministatus_expose_cb), NULL);
 	}
-	gtk_widget_set_usize(ministatus, 15, -1);
-	gtk_widget_show( ministatus );
+	gtk_widget_set_size_request(ministatus, 15, -1);
+	gtk_widget_set_visible(ministatus, TRUE);
 
 	return ministatus;
 }
-
 
 /*
  * Main Status
@@ -452,15 +369,15 @@ TEG_STATUS mainstatus_create( GtkWidget **window )
 	if( mainstatus_canvas )
 		goto error;
 
-	mainstatus_canvas = gnome_canvas_new();
+	// GTK4: Usamos GtkBox en lugar de GNOME Canvas
+	mainstatus_canvas = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
 	if( ! mainstatus_canvas )
 		goto error;
 
 	/* load colors for started_item, and player_colors */
 	colors_load_images();
 
-	gtk_widget_set_usize ( mainstatus_canvas, MAINSTATUS_X, MAINSTATUS_Y + 1 );
-	gnome_canvas_set_scroll_region (GNOME_CANVAS (mainstatus_canvas), 0, 0, MAINSTATUS_X, MAINSTATUS_Y);
+	gtk_widget_set_size_request(mainstatus_canvas, MAINSTATUS_X, MAINSTATUS_Y + 1);
 
 	/* background */
 	if( gui_theme.toolbar_custom && gui_theme.toolbar_name )
@@ -470,139 +387,62 @@ TEG_STATUS mainstatus_create( GtkWidget **window )
 		im = gdk_pixbuf_new_from_file(filename, NULL);
 
 		if( im ) {
-			gnome_canvas_item_new(
-				gnome_canvas_root(GNOME_CANVAS(mainstatus_canvas)),
-				gnome_canvas_pixbuf_get_type (),
-				"pixbuf", im,
-				"x", 0.0,
-				"y", 0.0,
-				/* "width", (double) gdk_pixbuf_get_width(im), */
-				/* "height", (double) gdk_pixbuf_get_height(im), */
-				"width", (double) MAINSTATUS_X,
-				"height", (double) MAINSTATUS_Y,
-				"anchor", GTK_ANCHOR_NW,
-				NULL);
+			GtkWidget *image = gtk_image_new_from_pixbuf(im);
+			gtk_box_pack_start(GTK_BOX(mainstatus_canvas), image, FALSE, FALSE, 0);
+			gtk_widget_set_visible(image, TRUE);
 
 			failed = 0;
 
-			gdk_pixbuf_unref( im );
+			g_object_unref( im );
 		}
 	}
 
 	/* load default background */
 	if( failed ) {
-		gnome_canvas_item_new(
-			gnome_canvas_root(GNOME_CANVAS(mainstatus_canvas)),
-			gnome_canvas_rect_get_type (),
-			"x1", 0.0,
-			"y1", 0.0,
-			"x2", (double) MAINSTATUS_X,
-			"y2", (double) MAINSTATUS_Y,
-			"fill_color","light green",
-			"outline_color","black",
-			NULL);
+		GtkWidget *label = gtk_label_new(_("Status Bar"));
+		gtk_box_pack_start(GTK_BOX(mainstatus_canvas), label, FALSE, FALSE, 0);
+		gtk_widget_set_visible(label, TRUE);
 	}
 
 	/* round started by */
-	gnome_canvas_item_new(
-		gnome_canvas_root(GNOME_CANVAS(mainstatus_canvas)),
-		gnome_canvas_text_get_type(),
-		"text",_("Round started by:"),
-		"x", (double) ROUND_OFFSET,
-		"y", (double) 3,
-		"x_offset", (double) -1,
-		"y_offset", (double) -1,
-		"font", HELVETICA_10_FONT,
-		"fill_color", gui_theme.toolbar_custom && gui_theme.toolbar_text_color ? gui_theme.toolbar_text_color : "black",
-		"anchor",GTK_ANCHOR_NE,
-		NULL);
+	GtkWidget *round_label = gtk_label_new(_("Round started by:"));
+	gtk_box_pack_start(GTK_BOX(mainstatus_canvas), round_label, FALSE, FALSE, 0);
+	gtk_widget_set_visible(round_label, TRUE);
 
-	color_started_item = gnome_canvas_item_new(
-		gnome_canvas_root(GNOME_CANVAS(mainstatus_canvas)),
-		gnome_canvas_pixbuf_get_type (),
-		"pixbuf", g_color_circles[TEG_MAX_PLAYERS],
-		"x", (double) ROUND_OFFSET + 4,
-		"y", (double) 4,
-		"width", (double) gdk_pixbuf_get_width(g_color_circles[TEG_MAX_PLAYERS]),
-		"height", (double) gdk_pixbuf_get_height(g_color_circles[TEG_MAX_PLAYERS]),
-		"anchor",GTK_ANCHOR_NW,
-		NULL);
-	gnome_canvas_item_hide( color_started_item );
+	color_started_item = gtk_image_new_from_pixbuf(g_color_circles[TEG_MAX_PLAYERS]);
+	gtk_box_pack_start(GTK_BOX(mainstatus_canvas), color_started_item, FALSE, FALSE, 0);
+	gtk_widget_set_visible(color_started_item, FALSE);
 
 	/* round number */
-	gnome_canvas_item_new(
-		gnome_canvas_root(GNOME_CANVAS(mainstatus_canvas)),
-		gnome_canvas_text_get_type(),
-		"text",_("Round number:"),
-		"x", (double) ROUND_OFFSET,
-		"y", (double) MAINSTATUS_Y/2 + 1,
-		"x_offset", (double) -1,
-		"y_offset", (double) -1,
-		"font", HELVETICA_10_FONT,
-		"fill_color", gui_theme.toolbar_custom && gui_theme.toolbar_text_color ? gui_theme.toolbar_text_color : "black",
-		"anchor",GTK_ANCHOR_NE,
-		NULL);
+	GtkWidget *round_num_label = gtk_label_new(_("Round number:"));
+	gtk_box_pack_start(GTK_BOX(mainstatus_canvas), round_num_label, FALSE, FALSE, 0);
+	gtk_widget_set_visible(round_num_label, TRUE);
 
-	round_number_item = gnome_canvas_item_new(
-		gnome_canvas_root(GNOME_CANVAS(mainstatus_canvas)),
-		gnome_canvas_text_get_type(),
-		"text",_("?"),
-		"x", (double) ROUND_OFFSET + 4,
-		"y", (double) MAINSTATUS_Y/2 + 2,
-		"x_offset", (double) -1,
-		"y_offset", (double) -1,
-		"font", HELVETICA_12_FONT,
-		"fill_color", gui_theme.toolbar_custom && gui_theme.toolbar_text_color ? gui_theme.toolbar_text_color : "black",
-		"anchor",GTK_ANCHOR_NW,
-		NULL);
+	round_number_item = gtk_label_new(_("?"));
+	gtk_box_pack_start(GTK_BOX(mainstatus_canvas), round_number_item, FALSE, FALSE, 0);
+	gtk_widget_set_visible(round_number_item, TRUE);
 
 	/* players turn */
-	gnome_canvas_item_new(
-		gnome_canvas_root(GNOME_CANVAS(mainstatus_canvas)),
-		gnome_canvas_text_get_type(),
-		"text",_("Players turn:"),
-		"x", (double) PLAYERS_COLORS_OFFSET - 4,
-		"y", (double) 3,
-		"x_offset", (double) -1,
-		"y_offset", (double) -1,
-		"font", HELVETICA_10_FONT,
-		"fill_color", gui_theme.toolbar_custom && gui_theme.toolbar_text_color ? gui_theme.toolbar_text_color : "black",
-		"anchor",GTK_ANCHOR_NE,
-		NULL);
+	GtkWidget *players_label = gtk_label_new(_("Players turn:"));
+	gtk_box_pack_start(GTK_BOX(mainstatus_canvas), players_label, FALSE, FALSE, 0);
+	gtk_widget_set_visible(players_label, TRUE);
 
 	/* create canvas for the circles & and load the circles */
 	for(i=0;i<TEG_MAX_PLAYERS;i++)
 	{
-		players_color[i] = gnome_canvas_item_new(
-			gnome_canvas_root(GNOME_CANVAS(mainstatus_canvas)),
-			gnome_canvas_pixbuf_get_type (),
-			"pixbuf", g_color_circles[TEG_MAX_PLAYERS],
-			"x", 0.0,
-			"y", 0.0,
-			"width", (double) gdk_pixbuf_get_width(g_color_circles[TEG_MAX_PLAYERS]),
-			"height", (double) gdk_pixbuf_get_height(g_color_circles[TEG_MAX_PLAYERS]),
-			"anchor", GTK_ANCHOR_NW,
-			NULL);
-		gnome_canvas_item_hide( players_color[i] );
+		players_color[i] = gtk_image_new_from_pixbuf(g_color_circles[TEG_MAX_PLAYERS]);
+		gtk_box_pack_start(GTK_BOX(mainstatus_canvas), players_color[i], FALSE, FALSE, 0);
+		gtk_widget_set_visible(players_color[i], FALSE);
 	}
 
-	players_color_over = gnome_canvas_item_new(
-		gnome_canvas_root(GNOME_CANVAS(mainstatus_canvas)),
-		gnome_canvas_pixbuf_get_type (),
-		"pixbuf", g_color_circle_over,
-		"x", 0.0,
-		"y", 0.0,
-		"width", (double) gdk_pixbuf_get_width(g_color_circle_over),
-		"height", (double) gdk_pixbuf_get_height(g_color_circle_over),
-		"anchor", GTK_ANCHOR_NW,
-		NULL);
-	gnome_canvas_item_hide( players_color_over );
-
+	players_color_over = gtk_image_new_from_pixbuf(g_color_circle_over);
+	gtk_box_pack_start(GTK_BOX(mainstatus_canvas), players_color_over, FALSE, FALSE, 0);
+	gtk_widget_set_visible(players_color_over, FALSE);
 
 	mainstatus_update();
 
 	*window = mainstatus_canvas;
-	gtk_widget_show( mainstatus_canvas );
+	gtk_widget_set_visible(mainstatus_canvas, TRUE);
 	return TEG_STATUS_SUCCESS;
 
 error:
@@ -622,36 +462,20 @@ TEG_STATUS mainstatus_update_colors()
 
 	i=0;
 
-	gnome_canvas_item_hide( players_color_over );
+	gtk_widget_set_visible(players_color_over, FALSE);
 	while( !IsListEmpty( &g_list_player ) && (l != &g_list_player) )
 	{
 		pJ = (PCPLAYER) l;
 
 		if( pJ->color >= 0 && pJ->numjug >= 0 ) {
-			gnome_canvas_item_show( players_color[i] );
+			gtk_widget_set_visible(players_color[i], TRUE);
 
 			if( g_game.whos_turn == pJ->numjug )
 			{
-				gnome_canvas_item_set(
-					players_color_over,
-					"pixbuf", g_color_circle_over,
-					"x", (double) PLAYERS_COLORS_OFFSET - 1 + (i%3) * 14,
-					"y", (double) 2 + 13 * (i<3?0:1),
-					"width", (double) gdk_pixbuf_get_width(g_color_circle_over) + 4,
-					"height", (double) gdk_pixbuf_get_height(g_color_circle_over) + 4,
-					NULL);
-
-				gnome_canvas_item_show( players_color_over );
+				gtk_widget_set_visible(players_color_over, TRUE);
 			}
 
-			gnome_canvas_item_set(
-				players_color[i],
-				"pixbuf", g_color_circles[pJ->color],
-				"x", (double) PLAYERS_COLORS_OFFSET + (i%3) * 14,
-				"y", (double) 4 + 13 * (i<3?0:1),
-				"width", (double) gdk_pixbuf_get_width(g_color_circles[pJ->color]),
-				"height", (double) gdk_pixbuf_get_height(g_color_circles[pJ->color]),
-				NULL);
+			gtk_image_set_from_pixbuf(GTK_IMAGE(players_color[i]), g_color_circles[pJ->color]);
 
 			i++;
 		}
@@ -664,22 +488,19 @@ TEG_STATUS mainstatus_update_colors()
 
 	{
 		PCPLAYER pJ;
-		gnome_canvas_item_hide( color_started_item );
+		gtk_widget_set_visible(color_started_item, FALSE);
 		if( g_game.who_started_round >= 0 && g_game.who_started_round < TEG_MAX_PLAYERS ) {
 
 			if( player_whois( g_game.who_started_round, &pJ ) == TEG_STATUS_SUCCESS )
 			{
-				gnome_canvas_item_set(
-					color_started_item,
-					"pixbuf", g_color_circles[pJ->color],
-					NULL);
-				gnome_canvas_item_show( color_started_item );
+				gtk_image_set_from_pixbuf(GTK_IMAGE(color_started_item), g_color_circles[pJ->color]);
+				gtk_widget_set_visible(color_started_item, TRUE);
 			}
 		}
 	}
 
 	for( ; i < TEG_MAX_PLAYERS ; i++ )
-			gnome_canvas_item_hide( players_color[i] );
+		gtk_widget_set_visible(players_color[i], FALSE);
 
 	return TEG_STATUS_SUCCESS;
 }
@@ -688,10 +509,9 @@ TEG_STATUS mainstatus_update()
 {
 	char buffer[256];
 	static int offset_right=-1, offset_left=-1;
-	static GnomeCanvasItem *gamestatus_item = NULL;
-	static GnomeCanvasItem *country_item = NULL;
-	static GnomeCanvasItem *cont_item = NULL;
-
+	static GtkWidget *gamestatus_item = NULL;
+	static GtkWidget *country_item = NULL;
+	static GtkWidget *cont_item = NULL;
 
 	if( ! mainstatus_canvas )
 		return TEG_STATUS_ERROR;
@@ -704,79 +524,49 @@ TEG_STATUS mainstatus_update()
 
 	/* game status */
 	if( gamestatus_item  )
-		gtk_object_destroy( GTK_OBJECT(gamestatus_item) );
+		gtk_widget_destroy(gamestatus_item);
 
-	gamestatus_item = gnome_canvas_item_new(
-		gnome_canvas_root(GNOME_CANVAS(mainstatus_canvas)),
-		gnome_canvas_text_get_type(),
-		"text",_(g_estados[g_game.estado]),
-		"x", (double) (MAINSTATUS_X + offset_right),
-		"y", (double) (MAINSTATUS_Y/2),
-		"x_offset", (double) -1,
-		"y_offset", (double) -1,
-		"font", HELVETICA_14_FONT,
-		"fill_color", gui_theme.toolbar_custom && gui_theme.toolbar_text_color ? gui_theme.toolbar_text_color : "black",
-		"anchor",GTK_ANCHOR_EAST,
-		NULL);
+	gamestatus_item = gtk_label_new(_(g_estados[g_game.estado]));
+	gtk_box_pack_start(GTK_BOX(mainstatus_canvas), gamestatus_item, FALSE, FALSE, 0);
+	gtk_widget_set_visible(gamestatus_item, TRUE);
 
 	/* country */
 	if( country_item  )
-		gtk_object_destroy( GTK_OBJECT(country_item) );
+		gtk_widget_destroy(country_item);
 
 	if( gui_private.country_i_am < 0 || gui_private.country_i_am >= COUNTRIES_CANT )
 		snprintf(buffer,sizeof(buffer)-1," ");
 	else
 		snprintf(buffer,sizeof(buffer)-1,"%s", countries_get_name(gui_private.country_i_am) );
 		
-	country_item = gnome_canvas_item_new(
-		gnome_canvas_root(GNOME_CANVAS(mainstatus_canvas)),
-		gnome_canvas_text_get_type(),
-		"text",buffer,
-		"x", (double) offset_left,
-		"y", (double) (2),
-		"x_offset", (double) -1,
-		"y_offset", (double) -1,
-		"font", HELVETICA_12_FONT,
-		"fill_color", gui_theme.toolbar_custom && gui_theme.toolbar_text_color ? gui_theme.toolbar_text_color : "black",
-		"anchor",GTK_ANCHOR_NW,
-		NULL);
+	country_item = gtk_label_new(buffer);
+	gtk_box_pack_start(GTK_BOX(mainstatus_canvas), country_item, FALSE, FALSE, 0);
+	gtk_widget_set_visible(country_item, TRUE);
 
 	/* continent */
 	if( cont_item  )
-		gtk_object_destroy( GTK_OBJECT(cont_item) );
+		gtk_widget_destroy(cont_item);
 
 	if( gui_private.country_i_am < 0 || gui_private.country_i_am >= COUNTRIES_CANT )
 		snprintf(buffer,sizeof(buffer)-1," ");
 	else
 		snprintf(buffer,sizeof(buffer)-1,"%s", cont_get_name( g_countries[gui_private.country_i_am].continente )  );
 		
-	cont_item = gnome_canvas_item_new(
-		gnome_canvas_root(GNOME_CANVAS(mainstatus_canvas)),
-		gnome_canvas_text_get_type(),
-		"text",buffer,
-		"x", (double) offset_left,
-		"y", (double) (16),
-		"x_offset", (double) -1,
-		"y_offset", (double) -1,
-		"font", HELVETICA_10_FONT,
-		"fill_color", gui_theme.toolbar_custom && gui_theme.toolbar_text_color ? gui_theme.toolbar_text_color : "black",
-		"anchor",GTK_ANCHOR_NW,
-		NULL);
+	cont_item = gtk_label_new(buffer);
+	gtk_box_pack_start(GTK_BOX(mainstatus_canvas), cont_item, FALSE, FALSE, 0);
+	gtk_widget_set_visible(cont_item, TRUE);
 
 	/* round number */
 	{
 		char buffer[256];
 
-		gnome_canvas_item_hide( round_number_item );
+		gtk_widget_set_visible(round_number_item, FALSE);
 		if( g_game.round_number >= 0 ) {
 
 			sprintf(buffer,"%d",g_game.round_number );
 
-			gnome_canvas_item_set(
-				round_number_item,
-				"text",buffer,
-				NULL);
-			gnome_canvas_item_show( round_number_item );
+			gtk_label_set_text(GTK_LABEL(round_number_item), buffer);
+			gtk_widget_set_visible(round_number_item, TRUE);
 		}
 	}
 

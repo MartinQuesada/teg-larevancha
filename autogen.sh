@@ -13,11 +13,11 @@ PKG_NAME="Tenes Empanadas Graciela"
     exit 1
 }
 
-autoreconf --verbose --install
-glib-gettextize --force
-intltoolize --copy --force
+echo "Running glib-gettextize..."
+glib-gettextize --force --copy
 
+echo "Running intltoolize..."
+intltoolize --copy --force --automake
 
-REQUIRED_AUTOMAKE_VERSION=1.7
-
-USE_GNOME2_MACROS=1 ACLOCAL_FLAGS="-I macros $ACLOCAL_FLAGS" . gnome-autogen.sh
+echo "Running autoreconf..."
+autoreconf --verbose --install --force
