@@ -21,10 +21,7 @@
 
 /* locate_country.c ahora está migrado - stubs removidos */
 
-/* === Funciones de g_scores.c (pendiente migración) === */
-void gui_scores_view(void) {
-    g_print("Scores view not yet implemented\n");
-}
+/* g_scores.c ahora está migrado - stubs removidos */
 
 /* preferences.c ahora está migrado - stubs removidos */
 

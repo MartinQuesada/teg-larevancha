@@ -490,6 +490,7 @@ libguiclient_a_SOURCES = \
 	mission.c mission.h	\
 	preferences.c preferences.h	\
 	locate_country.c locate_country.h	\
+	g_scores.c g_scores.h		\
 	stubs.c			\
 	fonts.h			\
 	robot.xpm

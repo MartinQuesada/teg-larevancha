@@ -207,7 +207,7 @@ TEG_STATUS gui_main(void)
 {
 
 	/* show welcome message */
-	textmsg(M_ALL,_("Tenes Empanadas Graciela - Gnome client v%s - by Ricardo Quesada"),VERSION);
+	textmsg(M_ALL,_("Tenes Empanadas Graciela -  GTK4 Client v%s - by Martín Quesada"),VERSION);
 	textmsg(M_ALL,_("Using theme '%s - v%s' by %s\n"),g_game.theme, gui_theme.version,gui_theme.author);
 
 	/* put the buttons in 'sensitive'*/
