@@ -1,1 +1,1 @@
-support.o: support.c
+# dummy

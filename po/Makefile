@@ -19,7 +19,7 @@
 
 GETTEXT_PACKAGE = teg
 PACKAGE = teg
-VERSION = 0.11.2
+VERSION = 0.2
 
 SHELL = /bin/sh
 

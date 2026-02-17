@@ -114,6 +114,20 @@ static int find_country_at(double x, double y)
 	return -1;
 }
 
+/*
+ * Convierte coordenadas de evento (pantalla/widget) a coordenadas lógicas del mapa.
+ * El dibujo aplica canvas_map_zoom, así que el hit-testing debe deshacer ese factor.
+ */
+static void map_event_to_logical(double event_x, double event_y, double *map_x, double *map_y)
+{
+	double zoom = canvas_map_zoom;
+	if (zoom <= 0.0)
+		zoom = 1.0;
+
+	*map_x = event_x / zoom;
+	*map_y = event_y / zoom;
+}
+
 
 /**
  * Dibuja la elipse con el número de ejércitos de un país
@@ -304,7 +318,9 @@ static gboolean map_draw_function(GtkWidget *widget, cairo_t *cr, gpointer user_
  */
 static gboolean on_motion_notify(GtkWidget *widget, GdkEventMotion *event, gpointer data)
 {
-	int new_hover = find_country_at(event->x, event->y);
+	double map_x, map_y;
+	map_event_to_logical(event->x, event->y, &map_x, &map_y);
+	int new_hover = find_country_at(map_x, map_y);
 	
 	if (new_hover != hovered_country) {
 		/* Salir del país anterior */
@@ -382,7 +398,9 @@ static gboolean on_motion_notify(GtkWidget *widget, GdkEventMotion *event, gpoin
  */
 static gboolean on_button_press(GtkWidget *widget, GdkEventButton *event, gpointer data)
 {
-	int country_id = find_country_at(event->x, event->y);
+	double map_x, map_y;
+	map_event_to_logical(event->x, event->y, &map_x, &map_y);
+	int country_id = find_country_at(map_x, map_y);
 	
 	if (country_id < 0)
 		return FALSE;

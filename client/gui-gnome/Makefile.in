@@ -113,7 +113,7 @@ am_libguiclient_a_OBJECTS = gui.$(OBJEXT) callbacks.$(OBJEXT) \
 	stock.$(OBJEXT) dices.$(OBJEXT) colors.$(OBJEXT) \
 	connect.$(OBJEXT) cards.$(OBJEXT) armies.$(OBJEXT) \
 	status.$(OBJEXT) mission.$(OBJEXT) preferences.$(OBJEXT) \
-	locate_country.$(OBJEXT) stubs.$(OBJEXT)
+	locate_country.$(OBJEXT) g_scores.$(OBJEXT) stubs.$(OBJEXT)
 libguiclient_a_OBJECTS = $(am_libguiclient_a_OBJECTS)
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
@@ -134,10 +134,11 @@ am__depfiles_remade = ./$(DEPDIR)/armies.Po ./$(DEPDIR)/callbacks.Po \
 	./$(DEPDIR)/cards.Po ./$(DEPDIR)/chatline.Po \
 	./$(DEPDIR)/colors.Po ./$(DEPDIR)/connect.Po \
 	./$(DEPDIR)/dices.Po ./$(DEPDIR)/g_cont.Po \
-	./$(DEPDIR)/g_country.Po ./$(DEPDIR)/gui.Po \
-	./$(DEPDIR)/interface.Po ./$(DEPDIR)/locate_country.Po \
-	./$(DEPDIR)/mission.Po ./$(DEPDIR)/preferences.Po \
-	./$(DEPDIR)/priv.Po ./$(DEPDIR)/status.Po ./$(DEPDIR)/stock.Po \
+	./$(DEPDIR)/g_country.Po ./$(DEPDIR)/g_scores.Po \
+	./$(DEPDIR)/gui.Po ./$(DEPDIR)/interface.Po \
+	./$(DEPDIR)/locate_country.Po ./$(DEPDIR)/mission.Po \
+	./$(DEPDIR)/preferences.Po ./$(DEPDIR)/priv.Po \
+	./$(DEPDIR)/status.Po ./$(DEPDIR)/stock.Po \
 	./$(DEPDIR)/stubs.Po ./$(DEPDIR)/support.Po
 am__mv = mv -f
 COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
@@ -490,6 +491,7 @@ libguiclient_a_SOURCES = \
 	mission.c mission.h	\
 	preferences.c preferences.h	\
 	locate_country.c locate_country.h	\
+	g_scores.c g_scores.h		\
 	stubs.c			\
 	fonts.h			\
 	robot.xpm
@@ -555,6 +557,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/dices.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/g_cont.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/g_country.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/g_scores.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/gui.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/interface.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/locate_country.Po@am__quote@ # am--include-marker
@@ -850,6 +853,7 @@ distclean: distclean-recursive
 	-rm -f ./$(DEPDIR)/dices.Po
 	-rm -f ./$(DEPDIR)/g_cont.Po
 	-rm -f ./$(DEPDIR)/g_country.Po
+	-rm -f ./$(DEPDIR)/g_scores.Po
 	-rm -f ./$(DEPDIR)/gui.Po
 	-rm -f ./$(DEPDIR)/interface.Po
 	-rm -f ./$(DEPDIR)/locate_country.Po
@@ -915,6 +919,7 @@ maintainer-clean: maintainer-clean-recursive
 	-rm -f ./$(DEPDIR)/dices.Po
 	-rm -f ./$(DEPDIR)/g_cont.Po
 	-rm -f ./$(DEPDIR)/g_country.Po
+	-rm -f ./$(DEPDIR)/g_scores.Po
 	-rm -f ./$(DEPDIR)/gui.Po
 	-rm -f ./$(DEPDIR)/interface.Po
 	-rm -f ./$(DEPDIR)/locate_country.Po
